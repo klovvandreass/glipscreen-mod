@@ -27,6 +27,7 @@ import android.widget.TextView
 class MainActivity : Activity() {
     private val captureRequest = 4101
     private val audioPermissionRequest = 4102
+    private val notificationPermissionRequest = 4103
     private lateinit var status: TextView
     private lateinit var resolution: Spinner
     private lateinit var frameRate: Spinner
@@ -240,6 +241,15 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioPermissionRequest)
             return
         }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), notificationPermissionRequest)
+            return
+        }
+        launchCapturePermission()
+    }
+
+    private fun launchCapturePermission() {
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(manager.createScreenCaptureIntent(), captureRequest)
     }
@@ -249,6 +259,9 @@ class MainActivity : Activity() {
         if (requestCode == audioPermissionRequest) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) requestRecording()
             else status.text = "Audio permission not granted"
+        } else if (requestCode == notificationPermissionRequest) {
+            // Recording can continue if notifications are denied; Android may still show the FGS task entry.
+            launchCapturePermission()
         }
     }
 
