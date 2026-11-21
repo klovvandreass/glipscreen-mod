@@ -60,7 +60,7 @@ class RecordingService : Service() {
     private data class PendingSample(val isVideo: Boolean, val bytes: ByteArray, val pts: Long, val flags: Int)
     private val pendingSamples = ArrayList<PendingSample>()
     private var audioMode = MODE_INTERNAL
-    private var intentMaxDimension = 1920
+    private var intentMaxDimension = 0
     private var intentRequestedFps = 0
     private var preferHevc = false
     private var playbackRecord: AudioRecord? = null
@@ -92,7 +92,7 @@ class RecordingService : Service() {
         val data = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
             else { @Suppress("DEPRECATION") intent?.getParcelableExtra(EXTRA_RESULT_DATA) }
         audioMode = intent?.getIntExtra(EXTRA_AUDIO_MODE, MODE_INTERNAL) ?: MODE_INTERNAL
-        intentMaxDimension = intent?.getIntExtra(EXTRA_MAX_DIMENSION, 1920)?.takeIf { it > 0 } ?: 1920
+        intentMaxDimension = intent?.getIntExtra(EXTRA_MAX_DIMENSION, 0)?.coerceAtLeast(0) ?: 0
         intentRequestedFps = intent?.getIntExtra(EXTRA_REQUESTED_FPS, 0) ?: 0
         preferHevc = intent?.getBooleanExtra(EXTRA_PREFER_HEVC, false) ?: false
         if (resultCode != 0 && data != null && projection == null) {
@@ -116,7 +116,7 @@ class RecordingService : Service() {
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(metrics)
-        val scale = minOf(1f, intentMaxDimension.toFloat() / maxOf(metrics.widthPixels, metrics.heightPixels))
+        val scale = if (intentMaxDimension <= 0) 1f else minOf(1f, intentMaxDimension.toFloat() / maxOf(metrics.widthPixels, metrics.heightPixels))
         val width = ((metrics.widthPixels * scale).toInt() / 2) * 2
         val height = ((metrics.heightPixels * scale).toInt() / 2) * 2
 
