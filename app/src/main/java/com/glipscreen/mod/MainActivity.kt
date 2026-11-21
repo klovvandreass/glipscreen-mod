@@ -34,7 +34,10 @@ class MainActivity : Activity() {
     private lateinit var codec: Spinner
     private lateinit var countdown: Spinner
     private lateinit var quality: Spinner
+    private lateinit var startButton: Button
     private var selectedMode = if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
+    private var captureFlowActive = false
+    private var countdownTimer: android.os.CountDownTimer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,13 +85,22 @@ class MainActivity : Activity() {
         root.addView(choices)
         selectedMode = prefs.getInt("audio_mode", if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC)
         choices.check(when (selectedMode) { RecordingService.MODE_MIC -> 101; RecordingService.MODE_BOTH -> 102; else -> 100 })
-        val start = Button(this).apply { text = "START RECORDING"; setOnClickListener { requestRecording() } }
-        val stop = Button(this).apply { text = "STOP RECORDING"; setOnClickListener {
-            val i = Intent(this@MainActivity, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP }
-            startService(i)
-            status.text = "Stopping recording…"
+        startButton = Button(this).apply { text = "START RECORDING"; setOnClickListener { requestRecording() } }
+        val stop = Button(this).apply { text = "STOP / CANCEL"; setOnClickListener {
+            val timer = countdownTimer
+            if (timer != null) {
+                timer.cancel()
+                countdownTimer = null
+                captureFlowActive = false
+                startButton.isEnabled = true
+                status.text = "Countdown cancelled"
+            } else {
+                val i = Intent(this@MainActivity, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP }
+                startService(i)
+                status.text = "Stopping recording…"
+            }
         } }
-        root.addView(start); root.addView(stop)
+        root.addView(startButton); root.addView(stop)
         val gallery = Button(this).apply {
             text = "MY RECORDINGS"
             setOnClickListener { showRecordings() }
@@ -97,6 +109,12 @@ class MainActivity : Activity() {
         root.addView(text("Klovv Screen automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
         val scroll = android.widget.ScrollView(this).apply { isFillViewport = true; addView(root) }
         setContentView(scroll)
+    }
+
+    override fun onDestroy() {
+        countdownTimer?.cancel()
+        countdownTimer = null
+        super.onDestroy()
     }
 
     override fun onPause() {
@@ -255,6 +273,12 @@ class MainActivity : Activity() {
     }
 
     private fun requestRecording() {
+        if (captureFlowActive || countdownTimer != null) return
+        captureFlowActive = true
+        continueRecordingPermissionFlow()
+    }
+
+    private fun continueRecordingPermissionFlow() {
         // Floating controls are optional: recording must still work when overlay access is denied.
         if (Build.VERSION.SDK_INT >= 26 && !Settings.canDrawOverlays(this)) {
             status.text = "Floating controls unavailable; notification controls will remain available"
@@ -274,14 +298,24 @@ class MainActivity : Activity() {
 
     private fun launchCapturePermission() {
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        startActivityForResult(manager.createScreenCaptureIntent(), captureRequest)
+        try {
+            startActivityForResult(manager.createScreenCaptureIntent(), captureRequest)
+        } catch (e: Exception) {
+            captureFlowActive = false
+            startButton.isEnabled = true
+            status.text = "Could not open screen-capture permission"
+            android.util.Log.e("KLOVVRecorder", "Capture permission launch failed", e)
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == audioPermissionRequest) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) requestRecording()
-            else status.text = "Audio permission not granted"
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) continueRecordingPermissionFlow()
+            else {
+                captureFlowActive = false
+                status.text = "Audio permission not granted"
+            }
         } else if (requestCode == notificationPermissionRequest) {
             // Recording can continue if notifications are denied; Android may still show the FGS task entry.
             launchCapturePermission()
@@ -292,6 +326,7 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == captureRequest) {
+            captureFlowActive = false
             if (resultCode == RESULT_OK && data != null) {
                 val maxDimension = when (resolution.selectedItemPosition) { 1 -> 854; 2 -> 1280; 3 -> 1920; 4 -> 2560; 5 -> 3840; else -> 0 }
                 val requestedFps = when (frameRate.selectedItemPosition) { 1 -> 24; 2 -> 30; 3 -> 60; 4 -> 90; 5 -> 120; else -> 0 }
@@ -307,22 +342,40 @@ class MainActivity : Activity() {
                 }
                 val delaySeconds = when (countdown.selectedItemPosition) { 1 -> 3; 2 -> 5; 3 -> 10; else -> 0 }
                 if (delaySeconds == 0) {
-                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
-                    status.text = "Recording started"
+                    startButton.isEnabled = false
+                    try {
+                        if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+                        status.text = "Recording starting…"
+                    } catch (e: Exception) {
+                        startButton.isEnabled = true
+                        status.text = "Could not start recording service"
+                        android.util.Log.e("KLOVVRecorder", "Service launch failed", e)
+                    }
                 } else {
-                    object : android.os.CountDownTimer(delaySeconds * 1000L, 1000L) {
+                    startButton.isEnabled = false
+                    countdownTimer = object : android.os.CountDownTimer(delaySeconds * 1000L, 1000L) {
                         override fun onTick(millisUntilFinished: Long) {
-                            status.text = "Recording starts in " + ((millisUntilFinished + 999) / 1000) + " seconds"
+                            status.text = "Recording starts in " + ((millisUntilFinished + 999) / 1000) + " seconds • tap STOP / CANCEL to cancel"
                         }
                         override fun onFinish() {
+                            countdownTimer = null
                             if (!isFinishing) {
-                                if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
-                                status.text = "Recording started"
+                                try {
+                                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+                                    status.text = "Recording starting…"
+                                } catch (e: Exception) {
+                                    startButton.isEnabled = true
+                                    status.text = "Could not start recording service"
+                                    android.util.Log.e("KLOVVRecorder", "Service launch failed", e)
+                                }
                             }
                         }
                     }.start()
                 }
-            } else status.text = "Screen-capture permission cancelled"
+            } else {
+                startButton.isEnabled = true
+                status.text = "Screen-capture permission cancelled"
+            }
         }
     }
 }
