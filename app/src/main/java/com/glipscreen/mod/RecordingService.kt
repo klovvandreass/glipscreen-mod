@@ -27,19 +27,20 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * First working video-only capture implementation.
- * Audio capture/mixing and user-selectable quality profiles are planned separately.
+ * Video-only screen capture prototype.
+ * The MediaProjection callback is registered before creating the VirtualDisplay,
+ * as required on recent Android versions.
  */
 class RecordingService : Service() {
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var encoder: MediaCodec? = null
     private var muxer: MediaMuxer? = null
-    private var drainThread: Thread? = null
     private var outputFile: File? = null
     private var videoTrack = -1
     private var muxerStarted = false
     private val stopping = AtomicBoolean(false)
+    private val eosRequested = AtomicBoolean(false)
     private val finished = AtomicBoolean(false)
 
     override fun onCreate() {
@@ -94,6 +95,7 @@ class RecordingService : Service() {
     private fun beginCapture(resultCode: Int, resultData: Intent) {
         val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         projection = manager.getMediaProjection(resultCode, resultData)
+
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(metrics)
@@ -122,10 +124,19 @@ class RecordingService : Service() {
 
         val moviesDir = getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES)
             ?: File(filesDir, "Movies")
-        if (!moviesDir.exists()) moviesDir.mkdirs()
+        if (!moviesDir.exists() && !moviesDir.mkdirs()) {
+            throw IllegalStateException("Cannot create output directory: $moviesDir")
+        }
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         outputFile = File(moviesDir, "GLIP_$stamp.mp4")
         muxer = MediaMuxer(outputFile!!.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+        // Android 14+ requires a callback to be registered before createVirtualDisplay().
+        projection!!.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                requestStop()
+            }
+        }, null)
 
         virtualDisplay = projection!!.createVirtualDisplay(
             "GLIPScreenCapture",
@@ -138,30 +149,40 @@ class RecordingService : Service() {
             null
         )
 
-        projection!!.registerCallback(object : MediaProjection.Callback() {
-            override fun onStop() {
-                requestStop()
-            }
-        }, null)
-
-        drainThread = Thread({ drainEncoder() }, "GLIP-Video-Drain").also { it.start() }
+        Thread({ drainEncoder() }, "GLIP-Video-Drain").start()
     }
 
     private fun drainEncoder() {
-        val codec = encoder ?: return
+        val codec = encoder ?: run {
+            finishRecording()
+            return
+        }
         val info = MediaCodec.BufferInfo()
         var endOfStream = false
+        var stopRequestedAt = 0L
 
         try {
             while (!endOfStream) {
                 if (stopping.get()) {
-                    try { codec.signalEndOfInputStream() } catch (_: Exception) { }
+                    if (stopRequestedAt == 0L) stopRequestedAt = android.os.SystemClock.elapsedRealtime()
+                    if (eosRequested.compareAndSet(false, true)) {
+                        try {
+                            codec.signalEndOfInputStream()
+                        } catch (error: Exception) {
+                            android.util.Log.e("GLIPRecorder", "Unable to signal encoder EOS", error)
+                            break
+                        }
+                    }
                 }
+
                 val index = codec.dequeueOutputBuffer(info, 10_000)
                 when {
                     index == MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                        if (stopping.get() && !codecStartedEos(codec)) {
-                            // Continue polling until the encoder emits EOS.
+                        if (stopRequestedAt != 0L &&
+                            android.os.SystemClock.elapsedRealtime() - stopRequestedAt > 10_000L
+                        ) {
+                            android.util.Log.e("GLIPRecorder", "Timed out waiting for encoder EOS")
+                            break
                         }
                     }
                     index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
@@ -172,7 +193,9 @@ class RecordingService : Service() {
                     }
                     index >= 0 -> {
                         val buffer = codec.getOutputBuffer(index)
-                        if (buffer != null && info.size > 0 && muxerStarted) {
+                        if (buffer != null && info.size > 0 && muxerStarted &&
+                            (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0
+                        ) {
                             buffer.position(info.offset)
                             buffer.limit(info.offset + info.size)
                             muxer!!.writeSampleData(videoTrack, buffer, info)
@@ -191,41 +214,42 @@ class RecordingService : Service() {
         }
     }
 
-    // EOS is requested once; the encoder signals completion through BUFFER_FLAG_END_OF_STREAM.
-    private fun codecStartedEos(codec: MediaCodec): Boolean = false
-
     private fun requestStop() {
         if (!stopping.compareAndSet(false, true)) return
         try { virtualDisplay?.release() } catch (_: Exception) { }
         virtualDisplay = null
-        try { projection?.stop() } catch (_: Exception) { }
-        projection = null
+        // Keep MediaProjection alive until the encoder has drained its final frames.
         if (encoder == null) finishRecording()
     }
 
     @Synchronized
     private fun finishRecording() {
         if (!finished.compareAndSet(false, true)) return
+
         try { virtualDisplay?.release() } catch (_: Exception) { }
         virtualDisplay = null
-        try { projection?.stop() } catch (_: Exception) { }
-        projection = null
         try { encoder?.stop() } catch (_: Exception) { }
         try { encoder?.release() } catch (_: Exception) { }
         encoder = null
         try {
             if (muxerStarted) muxer?.stop()
-        } catch (_: Exception) { }
+        } catch (error: Exception) {
+            android.util.Log.e("GLIPRecorder", "Unable to finalize MP4", error)
+        }
         try { muxer?.release() } catch (_: Exception) { }
         muxer = null
+        try { projection?.stop() } catch (_: Exception) { }
+        projection = null
 
         outputFile?.let { file ->
-            if (file.exists() && file.length() > 0) {
+            if (file.exists() && file.length() > 0L && muxerStarted) {
                 MediaScannerConnection.scanFile(
                     this, arrayOf(file.absolutePath), arrayOf("video/mp4"), null
                 )
+                android.util.Log.i("GLIPRecorder", "Recording saved: ${file.absolutePath} (${file.length()} bytes)")
             } else {
                 file.delete()
+                android.util.Log.e("GLIPRecorder", "Recording produced no valid MP4 file")
             }
         }
         stopForeground(STOP_FOREGROUND_REMOVE)
