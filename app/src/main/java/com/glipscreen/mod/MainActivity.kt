@@ -221,11 +221,18 @@ class MainActivity : Activity() {
                                     if (newName.isNotBlank()) {
                                         try {
                                             val values = android.content.ContentValues().apply { put(MediaStore.Video.Media.DISPLAY_NAME, "$newName.mp4") }
-                                            contentResolver.update(item.uri, values, null, null)
-                                            status.text = "Recording renamed"
-                                            dialog.dismiss()
-                                            showRecordings()
-                                        } catch (_: Exception) { status.text = "Could not rename recording" }
+                                            val updated = contentResolver.update(item.uri, values, null, null)
+                                            if (updated > 0) {
+                                                status.text = "Recording renamed"
+                                                dialog.dismiss()
+                                                showRecordings()
+                                            } else {
+                                                status.text = "Recording was not renamed"
+                                            }
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("KLOVVRecorder", "Rename failed", e)
+                                            status.text = "Could not rename recording"
+                                        }
                                     }
                                 }.show()
                         }
@@ -233,11 +240,18 @@ class MainActivity : Activity() {
                             .setNegativeButton("CANCEL", null)
                             .setPositiveButton("DELETE") { _, _ ->
                                 try {
-                                    contentResolver.delete(item.uri, null, null)
-                                    status.text = "Recording deleted"
-                                    dialog.dismiss()
-                                    showRecordings()
-                                } catch (_: Exception) { status.text = "Could not delete recording" }
+                                    val deleted = contentResolver.delete(item.uri, null, null)
+                                    if (deleted > 0) {
+                                        status.text = "Recording deleted"
+                                        dialog.dismiss()
+                                        showRecordings()
+                                    } else {
+                                        status.text = "Recording was not deleted"
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("KLOVVRecorder", "Delete failed", e)
+                                    status.text = "Could not delete recording"
+                                }
                             }.show()
                     }
                 }.show()
