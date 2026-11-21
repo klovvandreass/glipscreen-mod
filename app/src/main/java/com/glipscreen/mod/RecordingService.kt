@@ -117,8 +117,8 @@ class RecordingService : Service() {
                 } catch (_: Exception) { false }
             }
         }
-        val codecInfo = findEncoder(wantedMime)
-            ?: if (wantedMime != MediaFormat.MIMETYPE_VIDEO_AVC) findEncoder(MediaFormat.MIMETYPE_VIDEO_AVC) else null
+        val codecInfo = (findEncoder(wantedMime)
+            ?: (if (wantedMime != MediaFormat.MIMETYPE_VIDEO_AVC) findEncoder(MediaFormat.MIMETYPE_VIDEO_AVC) else null))
             ?: throw IllegalStateException("No compatible video encoder for this device")
         val mime = if (codecInfo.supportedTypes.any { it.equals(wantedMime, true) }) wantedMime else MediaFormat.MIMETYPE_VIDEO_AVC
         val videoCaps = codecInfo.getCapabilitiesForType(mime).videoCapabilities
