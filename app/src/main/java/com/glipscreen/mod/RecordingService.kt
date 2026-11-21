@@ -605,7 +605,6 @@ class RecordingService : Service() {
         if (!stopping.compareAndSet(false, true)) return
         try { virtualDisplay?.release() } catch (_: Exception) { }
         virtualDisplay = null
-        inputSurface = null
         try { playbackRecord?.stop() } catch (_: Exception) { }
         try { micRecord?.stop() } catch (_: Exception) { }
         if (!drainsStarted) {
@@ -626,6 +625,8 @@ class RecordingService : Service() {
         try { videoEncoder?.stop() } catch (_: Exception) { }
         try { videoEncoder?.release() } catch (_: Exception) { }
         videoEncoder = null
+        try { inputSurface?.release() } catch (_: Exception) { }
+        inputSurface = null
         try { audioEncoder?.stop() } catch (_: Exception) { }
         try { audioEncoder?.release() } catch (_: Exception) { }
         audioEncoder = null
