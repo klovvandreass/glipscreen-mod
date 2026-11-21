@@ -240,10 +240,10 @@ class MainActivity : Activity() {
         val codecItems = listOf("H.264", "H.265 / HEVC")
         val resolutionItems = listOf("Auto", "480p", "720p HD", "1080p Full HD", "1440p 2K", "2160p 4K")
         val grid1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val qualityTile = settingTile("QUALITY", qualityItems[quality.selectedItemPosition], "◈") {
+        lateinit var qualityTile: LinearLayout\n        lateinit var fpsTile: LinearLayout\n        lateinit var codecTile: LinearLayout\n        lateinit var resolutionTile: LinearLayout\n        qualityTile = settingTile("QUALITY", qualityItems[quality.selectedItemPosition], "◈") {
             chooseSetting("Recording quality", qualityItems, quality, "quality", qualityTile)
         }
-        val fpsTile = settingTile("FRAME RATE", fpsItems[frameRate.selectedItemPosition], "◷") {
+        fpsTile = settingTile("FRAME RATE", fpsItems[frameRate.selectedItemPosition], "◷") {
             chooseSetting("Frame rate", fpsItems, frameRate, "fps", fpsTile)
         }
         grid1.addView(qualityTile, LinearLayout.LayoutParams(0, dp(104), 1f).apply { marginEnd = dp(7) })
@@ -251,10 +251,10 @@ class MainActivity : Activity() {
         home.addView(grid1)
         gap(home, 10)
         val grid2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val codecTile = settingTile("VIDEO CODEC", codecItems[codec.selectedItemPosition], "▤") {
+        codecTile = settingTile("VIDEO CODEC", codecItems[codec.selectedItemPosition], "▤") {
             chooseSetting("Video codec", codecItems, codec, "codec", codecTile)
         }
-        val resolutionTile = settingTile("RESOLUTION", resolutionItems[resolution.selectedItemPosition], "▣") {
+        resolutionTile = settingTile("RESOLUTION", resolutionItems[resolution.selectedItemPosition], "▣") {
             chooseSetting("Resolution", resolutionItems, resolution, "resolution", resolutionTile)
         }
         grid2.addView(codecTile, LinearLayout.LayoutParams(0, dp(104), 1f).apply { marginEnd = dp(7) })
