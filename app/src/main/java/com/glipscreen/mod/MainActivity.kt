@@ -45,7 +45,7 @@ class MainActivity : Activity() {
         fun text(value: String, size: Float, color: Int = 0xFFFFFFFF.toInt()) = TextView(this).apply {
             text = value; textSize = size; setTextColor(color); setPadding(4, 10, 4, 8)
         }
-        root.addView(text("KLOVV SCREEN", 27f))
+        root.addView(text("Klovv Screen", 27f))
         root.addView(text("PRO SCREEN RECORDER  •  ANDROID", 12f, 0xFF9BA7BC.toInt()))
         status = text("Ready to record", 14f, 0xFF70E0AE.toInt())
         root.addView(status)
@@ -89,7 +89,7 @@ class MainActivity : Activity() {
             setOnClickListener { showRecordings() }
         }
         root.addView(gallery)
-        root.addView(text("KLOVV automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
+        root.addView(text("Klovv Screen automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
         setContentView(root)
     }
 
