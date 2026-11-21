@@ -95,9 +95,9 @@ class RecordingService : Service() {
         val codecInfos = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter {
             it.isEncoder && it.supportedTypes.any { type -> type.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }
         }
-        val codecInfo = if (Build.VERSION.SDK_INT >= 29) {
+        val codecInfo = (if (Build.VERSION.SDK_INT >= 29) {
             codecInfos.firstOrNull { it.isHardwareAccelerated } ?: codecInfos.firstOrNull()
-        } else codecInfos.firstOrNull()
+        } else codecInfos.firstOrNull())
             ?: throw IllegalStateException("No AVC video encoder is available")
         val videoCaps = codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).videoCapabilities
         val alignedWidth = (width / videoCaps.widthAlignment) * videoCaps.widthAlignment
@@ -141,7 +141,7 @@ class RecordingService : Service() {
         projection!!.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() { requestStop() }
         }, null)
-        virtualDisplay = projection!!.createVirtualDisplay("GLIPScreenCapture", width, height,
+        virtualDisplay = projection!!.createVirtualDisplay("GLIPScreenCapture", alignedWidth, alignedHeight,
             metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null)
         thread(name = "GLIP-Video-Drain") { drainVideo() }
         thread(name = "GLIP-Audio-Record") { recordAudio() }
