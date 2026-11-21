@@ -11,6 +11,7 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      HAS_RELEASE_SIGNING: ${{ env.HAS_RELEASE_SIGNING == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v5
@@ -35,14 +36,14 @@ jobs:
           "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
       - name: Prepare release signing key
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        if: ${{ env.HAS_RELEASE_SIGNING == 'true' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/klovv-release.jks"
           test -s "$RUNNER_TEMP/klovv-release.jks"
       - name: Build signed release APK
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        if: ${{ env.HAS_RELEASE_SIGNING == 'true' }}
         env:
           KLOVV_KEYSTORE_FILE: ${{ runner.temp }}/klovv-release.jks
           KLOVV_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -50,7 +51,7 @@ jobs:
           KLOVV_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle assembleRelease
       - name: Verify signed release APK
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        if: ${{ env.HAS_RELEASE_SIGNING == 'true' }}
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
@@ -59,14 +60,14 @@ jobs:
           "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
       - name: Explain release signing setup
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 == '' || secrets.ANDROID_KEYSTORE_PASSWORD == '' || secrets.ANDROID_KEY_ALIAS == '' || secrets.ANDROID_KEY_PASSWORD == '' }}
+        if: ${{ env.HAS_RELEASE_SIGNING != 'true' }}
         run: echo "Release APK not built: configure all four Android signing secrets in GitHub Settings > Secrets and variables > Actions."
       - uses: actions/upload-artifact@v4
         with:
           name: klovv-screen-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+        if: ${{ env.HAS_RELEASE_SIGNING == 'true' }}
         with:
           name: klovv-screen-release-apk
           path: app/build/outputs/apk/release/app-release.apk
