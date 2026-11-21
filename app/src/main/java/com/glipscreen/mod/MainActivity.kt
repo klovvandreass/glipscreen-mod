@@ -45,7 +45,7 @@ class MainActivity : Activity() {
         fun text(value: String, size: Float, color: Int = 0xFFFFFFFF.toInt()) = TextView(this).apply {
             text = value; textSize = size; setTextColor(color); setPadding(4, 10, 4, 8)
         }
-        root.addView(text("GLIP SCREEN", 27f))
+        root.addView(text("KLOVV SCREEN", 27f))
         root.addView(text("PRO SCREEN RECORDER  •  ANDROID", 12f, 0xFF9BA7BC.toInt()))
         status = text("Ready to record", 14f, 0xFF70E0AE.toInt())
         root.addView(status)
@@ -89,7 +89,7 @@ class MainActivity : Activity() {
             setOnClickListener { showRecordings() }
         }
         root.addView(gallery)
-        root.addView(text("GLIP automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
+        root.addView(text("KLOVV automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
         setContentView(root)
     }
 
@@ -118,7 +118,7 @@ class MainActivity : Activity() {
         val items = loadRecordings()
         if (items.isEmpty()) {
             AlertDialog.Builder(this).setTitle("My recordings")
-                .setMessage("Belum ada video GLIP. Hasil rekaman tersimpan di Movies/GLIP MOD.")
+                .setMessage("Belum ada video KLOVV. Hasil rekaman tersimpan di Movies/KLOVV MOD.")
                 .setPositiveButton("OK", null).show()
             return
         }
@@ -218,10 +218,10 @@ class MainActivity : Activity() {
         val args: Array<String>?
         if (Build.VERSION.SDK_INT >= 29) {
             selection = "${MediaStore.Video.Media.RELATIVE_PATH} = ?"
-            args = arrayOf("Movies/GLIP MOD/")
+            args = arrayOf("Movies/KLOVV MOD/")
         } else {
             selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
-            args = arrayOf("GLIP_%")
+            args = arrayOf("KLOVV_%")
         }
         try {
             contentResolver.query(collection, projection, selection, args,
@@ -233,7 +233,7 @@ class MainActivity : Activity() {
                 val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
                 while (cursor.moveToNext()) {
                     val uri = ContentUris.withAppendedId(collection, cursor.getLong(idCol))
-                    val name = cursor.getString(nameCol) ?: "GLIP recording"
+                    val name = cursor.getString(nameCol) ?: "KLOVV recording"
                     val seconds = cursor.getLong(durationCol) / 1000
                     val sizeMb = cursor.getLong(sizeCol) / (1024.0 * 1024.0)
                     val date = java.text.SimpleDateFormat("dd MMM yyyy • HH:mm", java.util.Locale.getDefault())
@@ -242,7 +242,7 @@ class MainActivity : Activity() {
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("GLIPRecorder", "Gallery query failed", e)
+            android.util.Log.e("KLOVVRecorder", "Gallery query failed", e)
         }
         return result
     }
