@@ -356,9 +356,11 @@ class MainActivity : Activity() {
                 if (delaySeconds == 0) {
                     startButton.isEnabled = false
                     try {
+                        RecordingService.setRecordingPending(true)
                         if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
                         status.text = "Recording starting…"
                     } catch (e: Exception) {
+                        RecordingService.setRecordingPending(false)
                         startButton.isEnabled = true
                         status.text = "Could not start recording service"
                         android.util.Log.e("KLOVVRecorder", "Service launch failed", e)
@@ -373,9 +375,11 @@ class MainActivity : Activity() {
                             countdownTimer = null
                             if (!isFinishing) {
                                 try {
+                                    RecordingService.setRecordingPending(true)
                                     if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
                                     status.text = "Recording starting…"
                                 } catch (e: Exception) {
+                                    RecordingService.setRecordingPending(false)
                                     startButton.isEnabled = true
                                     status.text = "Could not start recording service"
                                     android.util.Log.e("KLOVVRecorder", "Service launch failed", e)

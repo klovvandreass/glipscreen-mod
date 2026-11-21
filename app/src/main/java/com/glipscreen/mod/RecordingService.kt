@@ -660,6 +660,10 @@ class RecordingService : Service() {
         @Volatile var isRecordingActive: Boolean = false
             private set
 
+        fun setRecordingPending(pending: Boolean) {
+            isRecordingActive = pending
+        }
+
         const val ACTION_START = "com.glipscreen.mod.START"
         const val ACTION_STOP = "com.glipscreen.mod.STOP"
         const val ACTION_PAUSE = "com.glipscreen.mod.PAUSE"
