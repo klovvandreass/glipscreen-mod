@@ -1,6 +1,7 @@
 name: Klovv Screen signed release test
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "release-signing-test" ]
 
