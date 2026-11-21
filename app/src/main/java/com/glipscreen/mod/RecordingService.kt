@@ -342,10 +342,18 @@ class RecordingService : Service() {
         val codec = videoEncoder ?: return
         val info = MediaCodec.BufferInfo()
         var eos = false
+        var stopDeadlineNs = 0L
         try {
             while (!eos) {
-                if (stopping.get() && videoEosSignaled.compareAndSet(false, true)) {
-                    try { codec.signalEndOfInputStream() } catch (_: Exception) { }
+                if (stopping.get()) {
+                    if (stopDeadlineNs == 0L) stopDeadlineNs = System.nanoTime() + 5_000_000_000L
+                    if (videoEosSignaled.compareAndSet(false, true)) {
+                        try { codec.signalEndOfInputStream() } catch (_: Exception) { }
+                    }
+                }
+                if (stopDeadlineNs > 0L && System.nanoTime() >= stopDeadlineNs) {
+                    android.util.Log.w("KLOVVRecorder", "Video encoder drain timed out while stopping")
+                    break
                 }
                 val index = codec.dequeueOutputBuffer(info, 10000)
                 when {
@@ -361,8 +369,10 @@ class RecordingService : Service() {
                     }
                 }
             }
-        } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Video drain failed", e) }
-        finally { videoDone.set(true); maybeFinish() }
+        } catch (e: Exception) {
+            android.util.Log.e("KLOVVRecorder", "Video drain failed", e)
+            requestStop()
+        } finally { videoDone.set(true); maybeFinish() }
     }
 
     private fun recordAudio() {
@@ -446,7 +456,8 @@ class RecordingService : Service() {
             micRecord = null
             try {
                 var queued = false
-                while (!queued && !finished.get()) {
+                val eosDeadlineNs = System.nanoTime() + 3_000_000_000L
+                while (!queued && !finished.get() && System.nanoTime() < eosDeadlineNs) {
                     val idx = codec.dequeueInputBuffer(10000)
                     if (idx >= 0) {
                         codec.queueInputBuffer(idx, 0, 0, samples * 1_000_000L / rate,
@@ -454,6 +465,7 @@ class RecordingService : Service() {
                         queued = true
                     }
                 }
+                if (!queued) android.util.Log.w("KLOVVRecorder", "Audio encoder EOS input timed out")
             } catch (e: Exception) {
                 android.util.Log.e("KLOVVRecorder", "Could not signal audio EOS", e)
             }
@@ -464,8 +476,16 @@ class RecordingService : Service() {
         val codec = audioEncoder ?: return
         val info = MediaCodec.BufferInfo()
         var eos = false
+        var stopDeadlineNs = 0L
         try {
             while (!eos) {
+                if (stopping.get()) {
+                    if (stopDeadlineNs == 0L) stopDeadlineNs = System.nanoTime() + 5_000_000_000L
+                    if (System.nanoTime() >= stopDeadlineNs) {
+                        android.util.Log.w("KLOVVRecorder", "Audio encoder drain timed out while stopping")
+                        break
+                    }
+                }
                 val index = codec.dequeueOutputBuffer(info, 10000)
                 when {
                     index == MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
@@ -480,8 +500,10 @@ class RecordingService : Service() {
                     }
                 }
             }
-        } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Audio encoder drain failed", e) }
-        finally { audioDone.set(true); maybeFinish() }
+        } catch (e: Exception) {
+            android.util.Log.e("KLOVVRecorder", "Audio encoder drain failed", e)
+            requestStop()
+        } finally { audioDone.set(true); maybeFinish() }
     }
 
     private fun pauseCapture() {
