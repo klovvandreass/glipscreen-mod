@@ -655,7 +655,15 @@ class RecordingService : Service() {
         try { audioEncoder?.stop() } catch (_: Exception) { }
         try { audioEncoder?.release() } catch (_: Exception) { }
         audioEncoder = null
-        try { if (muxerStarted) muxer?.stop() } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Muxer finalization failed", e) }
+        var muxerFinalized = false
+        if (muxerStarted) {
+            try {
+                muxer?.stop()
+                muxerFinalized = true
+            } catch (e: Exception) {
+                android.util.Log.e("KLOVVRecorder", "Muxer finalization failed; discarding incomplete recording", e)
+            }
+        }
         try { muxer?.release() } catch (_: Exception) { }
         muxer = null
         try { playbackRecord?.stop() } catch (_: Exception) { }
@@ -669,12 +677,17 @@ class RecordingService : Service() {
         try { outputDescriptor?.close() } catch (_: Exception) { }
         outputDescriptor = null
         outputUri?.let { uri ->
-            if (muxerStarted) {
+            if (muxerStarted && muxerFinalized) {
                 if (Build.VERSION.SDK_INT >= 29) contentResolver.update(uri, ContentValues().apply {
                     put(MediaStore.Video.Media.IS_PENDING, 0)
                 }, null, null)
                 android.util.Log.i("KLOVVRecorder", "Saved: $uri")
-            } else contentResolver.delete(uri, null, null)
+            } else {
+                // Never leave an empty or corrupt pending MP4 in the media library.
+                try { contentResolver.delete(uri, null, null) } catch (e: Exception) {
+                    android.util.Log.e("KLOVVRecorder", "Could not remove incomplete recording", e)
+                }
+            }
         }
         removeFloatingControls()
         stopForeground(STOP_FOREGROUND_REMOVE)
