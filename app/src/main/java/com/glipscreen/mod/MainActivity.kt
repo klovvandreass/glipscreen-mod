@@ -223,6 +223,7 @@ class MainActivity : Activity() {
                                             val values = android.content.ContentValues().apply { put(MediaStore.Video.Media.DISPLAY_NAME, "$newName.mp4") }
                                             contentResolver.update(item.uri, values, null, null)
                                             status.text = "Recording renamed"
+                                            dialog.dismiss()
                                             showRecordings()
                                         } catch (_: Exception) { status.text = "Could not rename recording" }
                                     }
@@ -234,6 +235,7 @@ class MainActivity : Activity() {
                                 try {
                                     contentResolver.delete(item.uri, null, null)
                                     status.text = "Recording deleted"
+                                    dialog.dismiss()
                                     showRecordings()
                                 } catch (_: Exception) { status.text = "Could not delete recording" }
                             }.show()
