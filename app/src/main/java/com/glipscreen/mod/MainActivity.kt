@@ -33,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var frameRate: Spinner
     private lateinit var codec: Spinner
     private lateinit var countdown: Spinner
+    private lateinit var quality: Spinner
     private var selectedMode = if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,6 +67,10 @@ class MainActivity : Activity() {
         countdown = spinner(listOf("No countdown", "3 seconds", "5 seconds", "10 seconds"))
         countdown.setSelection(prefs.getInt("countdown", 1).coerceIn(0, 3))
         root.addView(countdown)
+        root.addView(text("VIDEO BITRATE", 12f, 0xFF9BA7BC.toInt()))
+        quality = spinner(listOf("Standard (smaller file)", "High quality", "Maximum quality"))
+        quality.setSelection(prefs.getInt("quality", 1).coerceIn(0, 2))
+        root.addView(quality)
         root.addView(text("AUDIO SOURCE", 12f, 0xFF9BA7BC.toInt()))
         val choices = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
         choices.addView(RadioButton(this).apply { id = 100; text = "Internal audio (Android 10+)"; setTextColor(0xFFFFFFFF.toInt()); isChecked = Build.VERSION.SDK_INT >= 29; isEnabled = Build.VERSION.SDK_INT >= 29 })
@@ -96,12 +101,13 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        if (::resolution.isInitialized && ::frameRate.isInitialized && ::codec.isInitialized && ::countdown.isInitialized) {
+        if (::resolution.isInitialized && ::frameRate.isInitialized && ::codec.isInitialized && ::countdown.isInitialized && ::quality.isInitialized) {
             getSharedPreferences("glip_settings", MODE_PRIVATE).edit()
                 .putInt("resolution", resolution.selectedItemPosition)
                 .putInt("fps", frameRate.selectedItemPosition)
                 .putInt("codec", codec.selectedItemPosition)
                 .putInt("countdown", countdown.selectedItemPosition)
+                .putInt("quality", quality.selectedItemPosition)
                 .putInt("audio_mode", selectedMode).apply()
         }
     }
@@ -296,6 +302,7 @@ class MainActivity : Activity() {
                     putExtra(RecordingService.EXTRA_MAX_DIMENSION, maxDimension)
                     putExtra(RecordingService.EXTRA_REQUESTED_FPS, requestedFps)
                     putExtra(RecordingService.EXTRA_PREFER_HEVC, codec.selectedItemPosition == 1)
+                    putExtra(RecordingService.EXTRA_QUALITY, quality.selectedItemPosition)
                 }
                 val delaySeconds = when (countdown.selectedItemPosition) { 1 -> 3; 2 -> 5; 3 -> 10; else -> 0 }
                 if (delaySeconds == 0) {
