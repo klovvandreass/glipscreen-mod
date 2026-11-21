@@ -118,7 +118,7 @@ class MainActivity : Activity() {
         val items = loadRecordings()
         if (items.isEmpty()) {
             AlertDialog.Builder(this).setTitle("My recordings")
-                .setMessage("Belum ada video KLOVV. Hasil rekaman tersimpan di Movies/KLOVV MOD.")
+                .setMessage("Belum ada video Klovv Screen. Hasil rekaman tersimpan di Movies/Klovv Screen.")
                 .setPositiveButton("OK", null).show()
             return
         }
@@ -218,7 +218,7 @@ class MainActivity : Activity() {
         val args: Array<String>?
         if (Build.VERSION.SDK_INT >= 29) {
             selection = "${MediaStore.Video.Media.RELATIVE_PATH} = ?"
-            args = arrayOf("Movies/KLOVV MOD/")
+            args = arrayOf("Movies/Klovv Screen/")
         } else {
             selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
             args = arrayOf("KLOVV_%")
@@ -233,7 +233,7 @@ class MainActivity : Activity() {
                 val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
                 while (cursor.moveToNext()) {
                     val uri = ContentUris.withAppendedId(collection, cursor.getLong(idCol))
-                    val name = cursor.getString(nameCol) ?: "KLOVV recording"
+                    val name = cursor.getString(nameCol) ?: "Klovv recording"
                     val seconds = cursor.getLong(durationCol) / 1000
                     val sizeMb = cursor.getLong(sizeCol) / (1024.0 * 1024.0)
                     val date = java.text.SimpleDateFormat("dd MMM yyyy • HH:mm", java.util.Locale.getDefault())
