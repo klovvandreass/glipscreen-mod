@@ -333,24 +333,27 @@ class RecordingService : Service() {
     private fun writeSample(isVideo: Boolean, buffer: java.nio.ByteBuffer, info: MediaCodec.BufferInfo) {
         synchronized(muxerLock) {
             if (info.size <= 0) return
-            val copy = ByteArray(info.size)
-            val duplicate = buffer.duplicate()
-            duplicate.position(info.offset)
-            duplicate.limit(info.offset + info.size)
-            duplicate.get(copy)
-            // Video Surface timestamps are absolute monotonic time; AAC timestamps start at zero.
-            // Put both tracks on one recording-relative timeline so MP4 duration is valid.
+            // Normalize both tracks onto the same recording-relative timeline.
             val normalizedPts = if (isVideo) (info.presentationTimeUs - recordingStartUs - totalPausedUs).coerceAtLeast(0L)
                 else info.presentationTimeUs
             if (!muxerStarted) {
+                // Only startup samples need a copy while waiting for both output formats.
+                val copy = ByteArray(info.size)
+                val duplicate = buffer.duplicate()
+                duplicate.position(info.offset)
+                duplicate.limit(info.offset + info.size)
+                duplicate.get(copy)
                 pendingSamples.add(PendingSample(isVideo, copy, normalizedPts, info.flags))
                 return
             }
             val track = if (isVideo) videoTrack else audioTrack
             if (track >= 0) {
-                val data = java.nio.ByteBuffer.wrap(copy)
-                val sampleInfo = MediaCodec.BufferInfo().apply { set(0, copy.size, normalizedPts, info.flags) }
-                muxer!!.writeSampleData(track, data, sampleInfo)
+                // MediaMuxer consumes the codec buffer synchronously. Write it before the
+                // encoder output buffer is released, avoiding a per-frame ByteArray allocation.
+                val sampleInfo = MediaCodec.BufferInfo().apply {
+                    set(info.offset, info.size, normalizedPts, info.flags)
+                }
+                muxer!!.writeSampleData(track, buffer, sampleInfo)
             }
         }
     }
