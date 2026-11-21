@@ -407,6 +407,14 @@ class RecordingService : Service() {
         val rate = 44100
         val playbackSamples = ShortArray(2048)
         val micSamples = ShortArray(2048)
+        fun readPcm(record: AudioRecord?, target: ShortArray): Int {
+            if (record == null) return 0
+            val count = record.read(target, 0, target.size, AudioRecord.READ_NON_BLOCKING)
+            if (count < 0) {
+                throw IllegalStateException("AudioRecord read failed with code $count")
+            }
+            return count
+        }
         var samples: Long = 0
         var eosQueued = false
         try {
@@ -428,17 +436,13 @@ class RecordingService : Service() {
                 var micCount = 0
                 while (count <= 0 && !stopping.get()) {
                     if (paused.get()) {
-                        if (playback != null) playback.read(playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING)
-                        if (mic != null) mic.read(micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING)
+                        readPcm(playback, playbackSamples)
+                        readPcm(mic, micSamples)
                         Thread.sleep(10)
                         continue
                     }
-                    playbackCount = if (playback != null) playback.read(
-                        playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING
-                    ).coerceAtLeast(0) else 0
-                    micCount = if (mic != null) mic.read(
-                        micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING
-                    ).coerceAtLeast(0) else 0
+                    playbackCount = readPcm(playback, playbackSamples)
+                    micCount = readPcm(mic, micSamples)
                     count = when {
                         playback != null && mic != null -> minOf(playbackCount, micCount)
                         playback != null -> playbackCount
@@ -475,7 +479,8 @@ class RecordingService : Service() {
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            android.util.Log.e("KLOVVRecorder", "Audio capture failed", e)
+            android.util.Log.e("KLOVVRecorder", "Audio capture failed; stopping recording to avoid a silent or incomplete MP4", e)
+            requestStop()
         } finally {
             try { playbackRecord?.stop() } catch (_: Exception) { }
             try { micRecord?.stop() } catch (_: Exception) { }
