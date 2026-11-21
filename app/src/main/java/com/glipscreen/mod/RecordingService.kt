@@ -122,50 +122,81 @@ class RecordingService : Service() {
 
         val wantedMime = if (preferHevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
         val allCodecs = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
-        fun findEncoder(mime: String): MediaCodecInfo? {
+        // Try the requested/native size first, then progressively safer sizes for devices
+        // whose hardware encoder cannot handle the full display resolution.
+        val sizeCandidates = listOf(1.0, 0.85, 0.75, 0.67, 0.5, 0.375).mapNotNull { factor ->
+            val w = ((width * factor).toInt() / 2) * 2
+            val h = ((height * factor).toInt() / 2) * 2
+            if (w >= 480 && h >= 270) w to h else null
+        }.distinct()
+        fun findEncoder(mime: String): Pair<MediaCodecInfo, Pair<Int, Int>>? {
             val candidates = allCodecs.filter { info ->
                 info.isEncoder && info.supportedTypes.any { it.equals(mime, true) }
             }.sortedByDescending { if (Build.VERSION.SDK_INT >= 29 && it.isHardwareAccelerated) 1 else 0 }
-            return candidates.firstOrNull { info ->
-                try {
-                    val caps = info.getCapabilitiesForType(mime).videoCapabilities
-                    val w = (width / caps.widthAlignment) * caps.widthAlignment
-                    val h = (height / caps.heightAlignment) * caps.heightAlignment
-                    caps.areSizeAndRateSupported(w, h, 24.0)
-                } catch (_: Exception) { false }
+            for ((candidateWidth, candidateHeight) in sizeCandidates) {
+                for (info in candidates) {
+                    try {
+                        val caps = info.getCapabilitiesForType(mime).videoCapabilities
+                        val w = (candidateWidth / caps.widthAlignment) * caps.widthAlignment
+                        val h = (candidateHeight / caps.heightAlignment) * caps.heightAlignment
+                        if (w >= 480 && h >= 270 && caps.areSizeAndRateSupported(w, h, 24.0)) {
+                            return info to (w to h)
+                        }
+                    } catch (_: Exception) { }
+                }
             }
+            return null
         }
-        val codecInfo = (findEncoder(wantedMime)
-            ?: (if (wantedMime != MediaFormat.MIMETYPE_VIDEO_AVC) findEncoder(MediaFormat.MIMETYPE_VIDEO_AVC) else null))
+        val selectedEncoder = findEncoder(wantedMime)
+            ?: (if (wantedMime != MediaFormat.MIMETYPE_VIDEO_AVC) findEncoder(MediaFormat.MIMETYPE_VIDEO_AVC) else null)
             ?: throw IllegalStateException("No compatible video encoder for this device")
+        val codecInfo = selectedEncoder.first
+        val (alignedWidth, alignedHeight) = selectedEncoder.second
         val mime = if (codecInfo.supportedTypes.any { it.equals(wantedMime, true) }) wantedMime else MediaFormat.MIMETYPE_VIDEO_AVC
         val videoCaps = codecInfo.getCapabilitiesForType(mime).videoCapabilities
-        val alignedWidth = (width / videoCaps.widthAlignment) * videoCaps.widthAlignment
-        val alignedHeight = (height / videoCaps.heightAlignment) * videoCaps.heightAlignment
         val fpsCandidates = if (intentRequestedFps > 0) listOf(intentRequestedFps, 60, 30, 24).distinct() else listOf(60, 30, 24)
         val fps = fpsCandidates.firstOrNull { it >= 24 && videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, it.toDouble()) }
-            ?: throw IllegalStateException("This device cannot encode the selected screen size")
+            ?: 24
         val pixelRatio = (alignedWidth.toLong() * alignedHeight.toLong()).toDouble() / (1920.0 * 1080.0)
         val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0).toLong().coerceIn(1_000_000L, 40_000_000L).toInt()
         val encoderCaps = codecInfo.getCapabilitiesForType(mime).encoderCapabilities
-        val vf = MediaFormat.createVideoFormat(mime, alignedWidth, alignedHeight).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
-            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-            // Ask the hardware encoder to prioritize real-time capture where supported.
-            if (Build.VERSION.SDK_INT >= 23) {
-                setInteger(MediaFormat.KEY_PRIORITY, 0)
-                setInteger(MediaFormat.KEY_OPERATING_RATE, fps)
+        fun createVideoFormat(useOptionalHints: Boolean): MediaFormat =
+            MediaFormat.createVideoFormat(mime, alignedWidth, alignedHeight).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+                setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
+                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
+                if (useOptionalHints && Build.VERSION.SDK_INT >= 23) {
+                    setInteger(MediaFormat.KEY_PRIORITY, 0)
+                    setInteger(MediaFormat.KEY_OPERATING_RATE, fps)
+                }
+                if (useOptionalHints && encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)) {
+                    setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+                }
             }
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
-            // Prefer a predictable real-time bitrate when the hardware encoder supports CBR.
-            if (encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)) {
-                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+        // Some vendor codecs reject optional real-time/CBR hints. Retry with a basic
+        // surface AVC/HEVC format rather than failing the entire recording.
+        var configured: MediaCodec? = null
+        try {
+            val candidate = MediaCodec.createByCodecName(codecInfo.name)
+            try {
+                candidate.configure(createVideoFormat(true), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                configured = candidate
+            } catch (firstError: Exception) {
+                try { candidate.release() } catch (_: Exception) { }
+                val fallback = MediaCodec.createByCodecName(codecInfo.name)
+                try {
+                    fallback.configure(createVideoFormat(false), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                    configured = fallback
+                } catch (fallbackError: Exception) {
+                    try { fallback.release() } catch (_: Exception) { }
+                    throw fallbackError
+                }
             }
+        } catch (e: Exception) {
+            throw IllegalStateException("Video encoder setup failed: ${e.message}", e)
         }
-        videoEncoder = MediaCodec.createByCodecName(codecInfo.name).apply {
-            configure(vf, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        }
+        videoEncoder = configured ?: throw IllegalStateException("Video encoder unavailable")
         val surface = videoEncoder!!.createInputSurface()
         inputSurface = surface
         videoEncoder!!.start()
