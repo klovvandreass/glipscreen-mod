@@ -42,6 +42,10 @@ class RecordingService : Service() {
     private val videoDone = AtomicBoolean(false)
     private val audioDone = AtomicBoolean(false)
     private val finished = AtomicBoolean(false)
+    private val videoEosSignaled = AtomicBoolean(false)
+    private var drainsStarted = false
+    private data class PendingSample(val isVideo: Boolean, val bytes: ByteArray, val pts: Long, val flags: Int)
+    private val pendingSamples = ArrayList<PendingSample>()
     private var audioMode = MODE_INTERNAL
     private var playbackRecord: AudioRecord? = null
     private var micRecord: AudioRecord? = null
@@ -65,7 +69,15 @@ class RecordingService : Service() {
         audioMode = intent?.getIntExtra(EXTRA_AUDIO_MODE, MODE_INTERNAL) ?: MODE_INTERNAL
         if (resultCode != 0 && data != null && projection == null) {
             try { beginCapture(resultCode, data) }
-            catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Start failed", e); requestStop() }
+            catch (e: Exception) {
+                android.util.Log.e("GLIPRecorder", "Start failed", e)
+                requestStop()
+                if (!drainsStarted) {
+                    videoDone.set(true)
+                    audioDone.set(true)
+                    maybeFinish()
+                }
+            }
         }
         return START_NOT_STICKY
     }
@@ -116,6 +128,7 @@ class RecordingService : Service() {
         thread(name = "GLIP-Video-Drain") { drainVideo() }
         thread(name = "GLIP-Audio-Record") { recordAudio() }
         thread(name = "GLIP-Audio-Drain") { drainAudio() }
+        drainsStarted = true
     }
 
     private fun setupAudio() {
@@ -160,14 +173,36 @@ class RecordingService : Service() {
             if (!muxerStarted && videoTrack >= 0 && audioTrack >= 0) {
                 muxer!!.start()
                 muxerStarted = true
+                for (sample in pendingSamples) {
+                    val track = if (sample.isVideo) videoTrack else audioTrack
+                    val data = java.nio.ByteBuffer.wrap(sample.bytes)
+                    val info = MediaCodec.BufferInfo().apply { set(0, sample.bytes.size, sample.pts, sample.flags) }
+                    muxer!!.writeSampleData(track, data, info)
+                }
+                pendingSamples.clear()
                 muxerLock.notifyAll()
             }
         }
     }
 
-    private fun writeSample(track: Int, buffer: java.nio.ByteBuffer, info: MediaCodec.BufferInfo) {
+    private fun writeSample(isVideo: Boolean, buffer: java.nio.ByteBuffer, info: MediaCodec.BufferInfo) {
         synchronized(muxerLock) {
-            if (muxerStarted && info.size > 0) muxer!!.writeSampleData(track, buffer, info)
+            if (info.size <= 0) return
+            val copy = ByteArray(info.size)
+            val duplicate = buffer.duplicate()
+            duplicate.position(info.offset)
+            duplicate.limit(info.offset + info.size)
+            duplicate.get(copy)
+            if (!muxerStarted) {
+                pendingSamples.add(PendingSample(isVideo, copy, info.presentationTimeUs, info.flags))
+                return
+            }
+            val track = if (isVideo) videoTrack else audioTrack
+            if (track >= 0) {
+                val data = java.nio.ByteBuffer.wrap(copy)
+                val sampleInfo = MediaCodec.BufferInfo().apply { set(0, copy.size, info.presentationTimeUs, info.flags) }
+                muxer!!.writeSampleData(track, data, sampleInfo)
+            }
         }
     }
 
@@ -177,7 +212,9 @@ class RecordingService : Service() {
         var eos = false
         try {
             while (!eos) {
-                if (stopping.get()) try { codec.signalEndOfInputStream() } catch (_: Exception) { }
+                if (stopping.get() && videoEosSignaled.compareAndSet(false, true)) {
+                    try { codec.signalEndOfInputStream() } catch (_: Exception) { }
+                }
                 val index = codec.dequeueOutputBuffer(info, 10000)
                 when {
                     index == MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
@@ -185,7 +222,7 @@ class RecordingService : Service() {
                     index >= 0 -> {
                         val b = codec.getOutputBuffer(index)
                         if (b != null && info.size > 0 && (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                            b.position(info.offset); b.limit(info.offset + info.size); writeSample(videoTrack, b, info)
+                            b.position(info.offset); b.limit(info.offset + info.size); writeSample(true, b, info)
                         }
                         eos = (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
                         codec.releaseOutputBuffer(index, false)
@@ -257,7 +294,7 @@ class RecordingService : Service() {
                     index >= 0 -> {
                         val b = codec.getOutputBuffer(index)
                         if (b != null && info.size > 0 && (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0) {
-                            b.position(info.offset); b.limit(info.offset + info.size); writeSample(audioTrack, b, info)
+                            b.position(info.offset); b.limit(info.offset + info.size); writeSample(false, b, info)
                         }
                         eos = (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
                         codec.releaseOutputBuffer(index, false)
@@ -272,7 +309,11 @@ class RecordingService : Service() {
         if (!stopping.compareAndSet(false, true)) return
         try { virtualDisplay?.release() } catch (_: Exception) { }
         virtualDisplay = null
-        if (videoEncoder == null) { videoDone.set(true); audioDone.set(true); maybeFinish() }
+        if (!drainsStarted) {
+            videoDone.set(true)
+            audioDone.set(true)
+            maybeFinish()
+        }
     }
 
     private fun maybeFinish() {
@@ -291,6 +332,12 @@ class RecordingService : Service() {
         try { if (muxerStarted) muxer?.stop() } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Muxer finalization failed", e) }
         try { muxer?.release() } catch (_: Exception) { }
         muxer = null
+        try { playbackRecord?.stop() } catch (_: Exception) { }
+        try { playbackRecord?.release() } catch (_: Exception) { }
+        playbackRecord = null
+        try { micRecord?.stop() } catch (_: Exception) { }
+        try { micRecord?.release() } catch (_: Exception) { }
+        micRecord = null
         try { projection?.stop() } catch (_: Exception) { }
         projection = null
         try { outputDescriptor?.close() } catch (_: Exception) { }
