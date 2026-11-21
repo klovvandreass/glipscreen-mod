@@ -56,6 +56,7 @@ class RecordingService : Service() {
     @Volatile private var drainsStarted = false
     // Surface video timestamps use the device monotonic clock; normalize them to the audio timeline.
     private var recordingStartUs = 0L
+    @Volatile private var audioCaptureStartUs = 0L
     private var pauseStartedUs = 0L
     private var totalPausedUs = 0L
     private data class PendingSample(val isVideo: Boolean, val bytes: ByteArray, val pts: Long, val flags: Int)
@@ -226,11 +227,11 @@ class RecordingService : Service() {
             ?: throw IllegalStateException("Cannot open output video")
         muxer = MediaMuxer(outputDescriptor!!.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
+        recordingStartUs = System.nanoTime() / 1_000L
         setupAudio()
         projection!!.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() { requestStop() }
         }, null)
-        recordingStartUs = System.nanoTime() / 1_000L
         virtualDisplay = projection!!.createVirtualDisplay("KLOVVScreenCapture", alignedWidth, alignedHeight,
             metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null)
         showFloatingControls()
@@ -285,6 +286,8 @@ class RecordingService : Service() {
                     throw IllegalStateException("Audio input failed to start")
                 }
             }
+            // Anchor captured PCM to the same monotonic clock used by Surface video PTS.
+            audioCaptureStartUs = System.nanoTime() / 1_000L
         } catch (e: Exception) {
             sources.forEach { try { it.stop() } catch (_: Exception) { }; try { it.release() } catch (_: Exception) { } }
             playbackRecord = null
@@ -376,6 +379,9 @@ class RecordingService : Service() {
             requestStop()
         } finally { videoDone.set(true); maybeFinish() }
     }
+
+    private fun audioPtsUs(samples: Long, rate: Int): Long =
+        (audioCaptureStartUs - recordingStartUs).coerceAtLeast(0L) + samples * 1_000_000L / rate
 
     private fun recordAudio() {
         val codec = audioEncoder ?: return
