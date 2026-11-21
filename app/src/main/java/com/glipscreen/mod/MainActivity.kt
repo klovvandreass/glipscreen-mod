@@ -175,6 +175,12 @@ class MainActivity : Activity() {
     }
 
     private fun requestRecording() {
+        if (Build.VERSION.SDK_INT >= 26 && !Settings.canDrawOverlays(this)) {
+            status.text = "Allow display over other apps to use floating controls"
+            val overlayIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+            startActivity(overlayIntent)
+            return
+        }
         if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioPermissionRequest)
             return
