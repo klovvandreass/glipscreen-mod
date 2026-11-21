@@ -240,7 +240,11 @@ class MainActivity : Activity() {
         val codecItems = listOf("H.264", "H.265 / HEVC")
         val resolutionItems = listOf("Auto", "480p", "720p HD", "1080p Full HD", "1440p 2K", "2160p 4K")
         val grid1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        lateinit var qualityTile: LinearLayout\n        lateinit var fpsTile: LinearLayout\n        lateinit var codecTile: LinearLayout\n        lateinit var resolutionTile: LinearLayout\n        qualityTile = settingTile("QUALITY", qualityItems[quality.selectedItemPosition], "◈") {
+        lateinit var qualityTile: LinearLayout
+        lateinit var fpsTile: LinearLayout
+        lateinit var codecTile: LinearLayout
+        lateinit var resolutionTile: LinearLayout
+        qualityTile = settingTile("QUALITY", qualityItems[quality.selectedItemPosition], "◈") {
             chooseSetting("Recording quality", qualityItems, quality, "quality", qualityTile)
         }
         fpsTile = settingTile("FRAME RATE", fpsItems[frameRate.selectedItemPosition], "◷") {
