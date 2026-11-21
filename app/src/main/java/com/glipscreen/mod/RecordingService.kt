@@ -26,6 +26,7 @@ import android.view.View
 import android.view.MotionEvent
 import android.graphics.PixelFormat
 import android.widget.Button
+import android.widget.Chronometer
 import android.widget.LinearLayout
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -69,6 +70,8 @@ class RecordingService : Service() {
     private var floatingPanel: View? = null
     private var windowManager: WindowManager? = null
     private var floatingPauseButton: Button? = null
+    private var floatingChronometer: Chronometer? = null
+    private var floatingPauseStartedMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -481,6 +484,8 @@ class RecordingService : Service() {
     private fun pauseCapture() {
         if (stopping.get() || !paused.compareAndSet(false, true)) return
         pauseStartedUs = System.nanoTime() / 1_000L
+        floatingPauseStartedMs = android.os.SystemClock.elapsedRealtime()
+        floatingChronometer?.stop()
         try { virtualDisplay?.setSurface(null) } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Pause failed", e) }
         updateNotification()
         updateFloatingControls()
@@ -489,6 +494,9 @@ class RecordingService : Service() {
     private fun resumeCapture() {
         if (stopping.get() || !paused.compareAndSet(true, false)) return
         if (pauseStartedUs > 0L) totalPausedUs += (System.nanoTime() / 1_000L - pauseStartedUs).coerceAtLeast(0L)
+        val pausedForMs = if (floatingPauseStartedMs > 0L) (android.os.SystemClock.elapsedRealtime() - floatingPauseStartedMs).coerceAtLeast(0L) else 0L
+        floatingChronometer?.let { timer -> timer.base = timer.base + pausedForMs; timer.start() }
+        floatingPauseStartedMs = 0L
         pauseStartedUs = 0L
         try { virtualDisplay?.setSurface(inputSurface) } catch (e: Exception) { paused.set(true); android.util.Log.e("KLOVVRecorder", "Resume failed", e) }
         updateNotification()
@@ -519,8 +527,16 @@ class RecordingService : Service() {
                 val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
                 startService(Intent(this@RecordingService, RecordingService::class.java).setAction(action))
             } }
+            val timer = Chronometer(this).apply {
+                base = android.os.SystemClock.elapsedRealtime()
+                setTextColor(0xFFFFFFFF.toInt())
+                textSize = 16f
+                setPadding(8, 4, 8, 8)
+                start()
+            }
+            floatingChronometer = timer
             val stop = Button(this).apply { text = "STOP"; setOnClickListener { startService(Intent(this@RecordingService, RecordingService::class.java).setAction(ACTION_STOP)) } }
-            panel.addView(title); panel.addView(floatingPauseButton); panel.addView(stop)
+            panel.addView(title); panel.addView(timer); panel.addView(floatingPauseButton); panel.addView(stop)
             val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL; x = 12 }
             // Drag the floating panel by its title without blocking the Pause/Stop buttons.
             var downX = 0f
@@ -551,7 +567,7 @@ class RecordingService : Service() {
     private fun updateFloatingControls() { floatingPauseButton?.text = if (paused.get()) "RESUME" else "PAUSE" }
     private fun removeFloatingControls() {
         try { val panel = floatingPanel; if (panel != null) windowManager?.removeView(panel) } catch (_: Exception) { }
-        floatingPanel = null; floatingPauseButton = null; windowManager = null
+        floatingPanel = null; floatingPauseButton = null; floatingChronometer = null; windowManager = null
     }
     private fun requestStop() {
         if (!stopping.compareAndSet(false, true)) return
