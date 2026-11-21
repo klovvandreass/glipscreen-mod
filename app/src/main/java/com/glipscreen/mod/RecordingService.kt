@@ -146,11 +146,16 @@ class RecordingService : Service() {
             ?: throw IllegalStateException("This device cannot encode the selected screen size")
         val pixelRatio = (alignedWidth.toLong() * alignedHeight.toLong()).toDouble() / (1920.0 * 1080.0)
         val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0).toLong().coerceIn(1_000_000L, 40_000_000L).toInt()
+        val encoderCaps = codecInfo.getCapabilitiesForType(mime).encoderCapabilities
         val vf = MediaFormat.createVideoFormat(mime, alignedWidth, alignedHeight).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
+            // Prefer a predictable real-time bitrate when the hardware encoder supports CBR.
+            if (encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)) {
+                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            }
         }
         videoEncoder = MediaCodec.createByCodecName(codecInfo.name).apply {
             configure(vf, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
