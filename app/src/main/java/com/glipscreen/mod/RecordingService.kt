@@ -181,8 +181,17 @@ class RecordingService : Service() {
                     setInteger(MediaFormat.KEY_PRIORITY, 0)
                     setInteger(MediaFormat.KEY_OPERATING_RATE, fps)
                 }
-                if (useOptionalHints && encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)) {
-                    setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+                if (useOptionalHints) {
+                    // Variable bitrate can spend more bits on fast, detailed gameplay frames
+                    // instead of enforcing the same compressed size on every frame.
+                    val bitrateMode = when {
+                        encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR) ->
+                            MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
+                        encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR) ->
+                            MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+                        else -> null
+                    }
+                    if (bitrateMode != null) setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode)
                 }
             }
         // Some vendor codecs reject optional real-time/CBR hints. Retry with a basic
