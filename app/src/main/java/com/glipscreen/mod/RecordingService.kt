@@ -22,6 +22,9 @@ import android.os.ParcelFileDescriptor
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import android.view.Surface
+import android.graphics.PixelFormat
+import android.widget.Button
+import android.widget.LinearLayout
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,6 +63,9 @@ class RecordingService : Service() {
     private var preferHevc = false
     private var playbackRecord: AudioRecord? = null
     private var micRecord: AudioRecord? = null
+    private var floatingPanel: View? = null
+    private var windowManager: WindowManager? = null
+    private var floatingPauseButton: Button? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -174,6 +180,7 @@ class RecordingService : Service() {
         recordingStartUs = System.nanoTime() / 1_000L
         virtualDisplay = projection!!.createVirtualDisplay("GLIPScreenCapture", alignedWidth, alignedHeight,
             metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null)
+        showFloatingControls()
         thread(name = "GLIP-Video-Drain") { drainVideo() }
         thread(name = "GLIP-Audio-Record") { recordAudio() }
         thread(name = "GLIP-Audio-Drain") { drainAudio() }
@@ -402,6 +409,7 @@ class RecordingService : Service() {
         pauseStartedUs = System.nanoTime() / 1_000L
         try { virtualDisplay?.setSurface(null) } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Pause failed", e) }
         updateNotification()
+        updateFloatingControls()
     }
 
     private fun resumeCapture() {
@@ -410,6 +418,7 @@ class RecordingService : Service() {
         pauseStartedUs = 0L
         try { virtualDisplay?.setSurface(inputSurface) } catch (e: Exception) { paused.set(true); android.util.Log.e("GLIPRecorder", "Resume failed", e) }
         updateNotification()
+        updateFloatingControls()
     }
 
     private fun updateNotification() {
@@ -427,6 +436,28 @@ class RecordingService : Service() {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
     }
 
+    private fun showFloatingControls() {
+        if (Build.VERSION.SDK_INT < 26 || !android.provider.Settings.canDrawOverlays(this)) return
+        try {
+            val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 10, 12, 10); setBackgroundColor(0xEE111827.toInt()) }
+            val title = android.widget.TextView(this).apply { text = "GLIP • RECORDING"; textSize = 12f; setTextColor(0xFF80B7FF.toInt()); setPadding(8, 4, 8, 8) }
+            floatingPauseButton = Button(this).apply { text = "PAUSE"; setOnClickListener {
+                val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
+                startService(Intent(this@RecordingService, RecordingService::class.java).setAction(action))
+            } }
+            val stop = Button(this).apply { text = "STOP"; setOnClickListener { startService(Intent(this@RecordingService, RecordingService::class.java).setAction(ACTION_STOP)) } }
+            panel.addView(title); panel.addView(floatingPauseButton); panel.addView(stop)
+            val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL; x = 12 }
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            windowManager?.addView(panel, params)
+            floatingPanel = panel
+        } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Floating controls unavailable", e) }
+    }
+    private fun updateFloatingControls() { floatingPauseButton?.text = if (paused.get()) "RESUME" else "PAUSE" }
+    private fun removeFloatingControls() {
+        try { floatingPanel?.let { windowManager?.removeView(it) } } catch (_: Exception) { }
+        floatingPanel = null; floatingPauseButton = null; windowManager = null
+    }
     private fun requestStop() {
         if (!stopping.compareAndSet(false, true)) return
         try { virtualDisplay?.release() } catch (_: Exception) { }
@@ -475,6 +506,7 @@ class RecordingService : Service() {
                 android.util.Log.i("GLIPRecorder", "Saved: $uri")
             } else contentResolver.delete(uri, null, null)
         }
+        removeFloatingControls()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
