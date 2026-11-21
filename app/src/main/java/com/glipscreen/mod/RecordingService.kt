@@ -691,13 +691,21 @@ class RecordingService : Service() {
         try { outputDescriptor?.close() } catch (_: Exception) { }
         outputDescriptor = null
         outputUri?.let { uri ->
-            if (muxerStarted && muxerFinalized) {
-                if (Build.VERSION.SDK_INT >= 29) contentResolver.update(uri, ContentValues().apply {
-                    put(MediaStore.Video.Media.IS_PENDING, 0)
-                }, null, null)
+            var published = muxerStarted && muxerFinalized
+            if (published && Build.VERSION.SDK_INT >= 29) {
+                published = try {
+                    contentResolver.update(uri, ContentValues().apply {
+                        put(MediaStore.Video.Media.IS_PENDING, 0)
+                    }, null, null) > 0
+                } catch (e: Exception) {
+                    android.util.Log.e("KLOVVRecorder", "Could not publish finalized recording", e)
+                    false
+                }
+            }
+            if (published) {
                 android.util.Log.i("KLOVVRecorder", "Saved: $uri")
             } else {
-                // Never leave an empty or corrupt pending MP4 in the media library.
+                // Never leave an empty, corrupt, or unpublished pending MP4 in the media library.
                 try { contentResolver.delete(uri, null, null) } catch (e: Exception) {
                     android.util.Log.e("KLOVVRecorder", "Could not remove incomplete recording", e)
                 }
