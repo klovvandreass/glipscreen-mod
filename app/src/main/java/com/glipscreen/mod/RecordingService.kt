@@ -208,7 +208,7 @@ class RecordingService : Service() {
         inputSurface = surface
         videoEncoder!!.start()
 
-        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val values = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, "Klovv_$stamp.mp4")
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")

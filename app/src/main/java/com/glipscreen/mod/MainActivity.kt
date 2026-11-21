@@ -85,7 +85,7 @@ class MainActivity : Activity() {
         val start = Button(this).apply { text = "START RECORDING"; setOnClickListener { requestRecording() } }
         val stop = Button(this).apply { text = "STOP RECORDING"; setOnClickListener {
             val i = Intent(this@MainActivity, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP }
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+            startService(i)
             status.text = "Stopping recording…"
         } }
         root.addView(start); root.addView(stop)
