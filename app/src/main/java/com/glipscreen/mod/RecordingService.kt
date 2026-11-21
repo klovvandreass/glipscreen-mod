@@ -62,6 +62,7 @@ class RecordingService : Service() {
     private var audioMode = MODE_INTERNAL
     private var intentMaxDimension = 0
     private var intentRequestedFps = 0
+    private var intentQuality = 1
     private var preferHevc = false
     private var playbackRecord: AudioRecord? = null
     private var micRecord: AudioRecord? = null
@@ -94,6 +95,7 @@ class RecordingService : Service() {
         audioMode = intent?.getIntExtra(EXTRA_AUDIO_MODE, MODE_INTERNAL) ?: MODE_INTERNAL
         intentMaxDimension = intent?.getIntExtra(EXTRA_MAX_DIMENSION, 0)?.coerceAtLeast(0) ?: 0
         intentRequestedFps = intent?.getIntExtra(EXTRA_REQUESTED_FPS, 0) ?: 0
+        intentQuality = (intent?.getIntExtra(EXTRA_QUALITY, 1) ?: 1).coerceIn(0, 2)
         preferHevc = intent?.getBooleanExtra(EXTRA_PREFER_HEVC, false) ?: false
         if (resultCode != 0 && data != null && projection == null) {
             try { beginCapture(resultCode, data) }
@@ -158,7 +160,9 @@ class RecordingService : Service() {
         val fps = fpsCandidates.firstOrNull { it >= 24 && videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, it.toDouble()) }
             ?: 24
         val pixelRatio = (alignedWidth.toLong() * alignedHeight.toLong()).toDouble() / (1920.0 * 1080.0)
-        val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0).toLong().coerceIn(1_000_000L, 40_000_000L).toInt()
+        val qualityMultiplier = when (intentQuality) { 0 -> 0.70; 2 -> 1.35; else -> 1.0 }
+        val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0 * qualityMultiplier)
+            .toLong().coerceIn(1_000_000L, 40_000_000L).toInt()
         val encoderCaps = codecInfo.getCapabilitiesForType(mime).encoderCapabilities
         fun createVideoFormat(useOptionalHints: Boolean): MediaFormat =
             MediaFormat.createVideoFormat(mime, alignedWidth, alignedHeight).apply {
@@ -616,6 +620,7 @@ class RecordingService : Service() {
         const val EXTRA_MAX_DIMENSION = "max_dimension"
         const val EXTRA_REQUESTED_FPS = "requested_fps"
         const val EXTRA_PREFER_HEVC = "prefer_hevc"
+        const val EXTRA_QUALITY = "video_quality"
         const val MODE_INTERNAL = 0
         const val MODE_MIC = 1
         const val MODE_BOTH = 2
