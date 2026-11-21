@@ -31,6 +31,7 @@ class MainActivity : Activity() {
     private lateinit var resolution: Spinner
     private lateinit var frameRate: Spinner
     private lateinit var codec: Spinner
+    private lateinit var countdown: Spinner
     private var selectedMode = if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +61,10 @@ class MainActivity : Activity() {
         resolution.setSelection(prefs.getInt("resolution", 0).coerceIn(0, 5))
         frameRate.setSelection(prefs.getInt("fps", 0).coerceIn(0, 5))
         codec.setSelection(prefs.getInt("codec", 0).coerceIn(0, 1))
+        root.addView(text("COUNTDOWN", 12f, 0xFF9BA7BC.toInt()))
+        countdown = spinner(listOf("No countdown", "3 seconds", "5 seconds", "10 seconds"))
+        countdown.setSelection(prefs.getInt("countdown", 1).coerceIn(0, 3))
+        root.addView(countdown)
         root.addView(text("AUDIO SOURCE", 12f, 0xFF9BA7BC.toInt()))
         val choices = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
         choices.addView(RadioButton(this).apply { id = 100; text = "Internal audio (Android 10+)"; setTextColor(0xFFFFFFFF.toInt()); isChecked = Build.VERSION.SDK_INT >= 29; isEnabled = Build.VERSION.SDK_INT >= 29 })
@@ -69,7 +74,8 @@ class MainActivity : Activity() {
             selectedMode = when (checked) { 101 -> RecordingService.MODE_MIC; 102 -> RecordingService.MODE_BOTH; else -> RecordingService.MODE_INTERNAL }
         }
         root.addView(choices)
-        choices.check(prefs.getInt("audio_mode", if (Build.VERSION.SDK_INT >= 29) 100 else 101))
+        selectedMode = prefs.getInt("audio_mode", if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC)
+        choices.check(when (selectedMode) { RecordingService.MODE_MIC -> 101; RecordingService.MODE_BOTH -> 102; else -> 100 })
         val start = Button(this).apply { text = "START RECORDING"; setOnClickListener { requestRecording() } }
         val stop = Button(this).apply { text = "STOP RECORDING"; setOnClickListener {
             val i = Intent(this@MainActivity, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP }
@@ -88,11 +94,12 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        if (::resolution.isInitialized && ::frameRate.isInitialized && ::codec.isInitialized) {
+        if (::resolution.isInitialized && ::frameRate.isInitialized && ::codec.isInitialized && ::countdown.isInitialized) {
             getSharedPreferences("glip_settings", MODE_PRIVATE).edit()
                 .putInt("resolution", resolution.selectedItemPosition)
                 .putInt("fps", frameRate.selectedItemPosition)
                 .putInt("codec", codec.selectedItemPosition)
+                .putInt("countdown", countdown.selectedItemPosition)
                 .putInt("audio_mode", selectedMode).apply()
         }
     }
