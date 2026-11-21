@@ -97,11 +97,13 @@ class RecordingService : Service() {
         preferHevc = intent?.getBooleanExtra(EXTRA_PREFER_HEVC, false) ?: false
         if (resultCode == 0 || data == null) {
             android.util.Log.e("KLOVVRecorder", "Recording start rejected: missing screen-capture permission data")
+            isRecordingActive = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
         if (projection == null) {
+            isRecordingActive = true
             try { beginCapture(resultCode, data) }
             catch (e: Exception) {
                 android.util.Log.e("KLOVVRecorder", "Start failed", e)
@@ -617,6 +619,7 @@ class RecordingService : Service() {
 
     @Synchronized private fun finishRecording() {
         if (!finished.compareAndSet(false, true)) return
+        isRecordingActive = false
         try { virtualDisplay?.release() } catch (_: Exception) { }
         try { videoEncoder?.stop() } catch (_: Exception) { }
         try { videoEncoder?.release() } catch (_: Exception) { }
@@ -654,6 +657,9 @@ class RecordingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        @Volatile var isRecordingActive: Boolean = false
+            private set
+
         const val ACTION_START = "com.glipscreen.mod.START"
         const val ACTION_STOP = "com.glipscreen.mod.STOP"
         const val ACTION_PAUSE = "com.glipscreen.mod.PAUSE"

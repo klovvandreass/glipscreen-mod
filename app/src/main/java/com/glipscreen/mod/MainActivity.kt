@@ -111,6 +111,18 @@ class MainActivity : Activity() {
         setContentView(scroll)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::startButton.isInitialized) {
+            android.os.Handler(mainLooper).postDelayed({
+                if (!isFinishing && ::startButton.isInitialized) {
+                    startButton.isEnabled = !RecordingService.isRecordingActive &&
+                        countdownTimer == null && !captureFlowActive
+                }
+            }, 600L)
+        }
+    }
+
     override fun onDestroy() {
         countdownTimer?.cancel()
         countdownTimer = null
