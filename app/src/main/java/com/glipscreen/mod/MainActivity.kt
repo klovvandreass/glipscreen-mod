@@ -153,7 +153,22 @@ class MainActivity : Activity() {
                                 val w = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH) ?: "?"
                                 val h = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT) ?: "?"
                                 val bitrate = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()?.div(1000)
-                                "Resolution: ${w} × ${h}\\nBitrate: ${bitrate?.let { "$it kbps" } ?: "Not available"}\\n${item.details}"
+                                val fps = try {
+                                    val extractor = android.media.MediaExtractor()
+                                    extractor.setDataSource(this, item.uri, null)
+                                    var detected: String? = null
+                                    for (track in 0 until extractor.trackCount) {
+                                        val format = extractor.getTrackFormat(track)
+                                        if (format.getString(android.media.MediaFormat.KEY_MIME)?.startsWith("video/") == true &&
+                                            format.containsKey(android.media.MediaFormat.KEY_FRAME_RATE)) {
+                                            detected = format.getInteger(android.media.MediaFormat.KEY_FRAME_RATE).toString()
+                                            break
+                                        }
+                                    }
+                                    extractor.release()
+                                    detected
+                                } catch (_: Exception) { null }
+                                "Resolution: ${w} × ${h}\\nFrame rate: ${fps?.let { "$it FPS" } ?: "Not available"}\\nBitrate: ${bitrate?.let { "$it kbps" } ?: "Not available"}\\n${item.details}"
                             } catch (_: Exception) { item.details } finally { try { retriever.release() } catch (_: Exception) { } }
                             AlertDialog.Builder(this).setTitle("VIDEO DETAILS").setMessage(info).setPositiveButton("OK", null).show()
                         }
