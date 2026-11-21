@@ -191,7 +191,8 @@ class RecordingService : Service() {
     private fun setupAudio() {
         val rate = 44100
         val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
-        val bufferSize = maxOf(minBuffer, rate * 2 / 2)
+        if (minBuffer <= 0) throw IllegalStateException("This device does not support the selected audio format")
+        val bufferSize = maxOf(minBuffer * 2, 16384)
         val sources = mutableListOf<AudioRecord>()
         if (audioMode == MODE_INTERNAL || audioMode == MODE_BOTH) {
             if (Build.VERSION.SDK_INT < 29) throw IllegalStateException("Internal audio needs Android 10 or newer")
@@ -203,6 +204,7 @@ class RecordingService : Service() {
                 .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                     .setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_IN_STEREO).build())
                 .setBufferSizeInBytes(bufferSize).build()
+            if (playbackRecord?.state != AudioRecord.STATE_INITIALIZED) throw IllegalStateException("Internal audio capture could not be initialized")
             sources.add(playbackRecord!!)
         }
         if (audioMode == MODE_MIC || audioMode == MODE_BOTH) {
@@ -210,6 +212,7 @@ class RecordingService : Service() {
                 .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                     .setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_IN_STEREO).build())
                 .setBufferSizeInBytes(bufferSize).build()
+            if (micRecord?.state != AudioRecord.STATE_INITIALIZED) throw IllegalStateException("Microphone could not be initialized")
             sources.add(micRecord!!)
         }
         val af = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, rate, 2).apply {
@@ -221,7 +224,22 @@ class RecordingService : Service() {
             configure(af, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             start()
         }
-        sources.forEach { it.startRecording() }
+        try {
+            sources.forEach { source ->
+                source.startRecording()
+                if (source.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                    throw IllegalStateException("Audio input failed to start")
+                }
+            }
+        } catch (e: Exception) {
+            sources.forEach { try { it.stop() } catch (_: Exception) { }; try { it.release() } catch (_: Exception) { } }
+            playbackRecord = null
+            micRecord = null
+            try { audioEncoder?.stop() } catch (_: Exception) { }
+            try { audioEncoder?.release() } catch (_: Exception) { }
+            audioEncoder = null
+            throw e
+        }
     }
 
     private fun addTrack(isVideo: Boolean, format: MediaFormat) {
