@@ -36,6 +36,7 @@ jobs:
           "${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "targetSdkVersion:'35'"
           unzip -t "$APK"
           "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          sha256sum "$APK"
       - uses: actions/upload-artifact@v4
         with:
           name: glipscreen-mod-debug-apk
