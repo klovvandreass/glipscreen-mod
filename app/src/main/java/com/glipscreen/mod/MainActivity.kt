@@ -8,48 +8,72 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.RadioGroup
 import android.widget.RadioButton
+import android.widget.Spinner
 import android.widget.TextView
 
 class MainActivity : Activity() {
     private val captureRequest = 4101
     private val audioPermissionRequest = 4102
     private lateinit var status: TextView
+    private lateinit var resolution: Spinner
+    private lateinit var frameRate: Spinner
+    private lateinit var codec: Spinner
     private var selectedMode = RecordingService.MODE_INTERNAL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val title = TextView(this).apply { text = "GLIP SCREEN MOD"; textSize = 26f; gravity = Gravity.CENTER; setPadding(20, 36, 20, 8) }
-        val subtitle = TextView(this).apply { text = "Screen Recorder"; textSize = 16f; gravity = Gravity.CENTER; setPadding(20, 0, 20, 20) }
-        status = TextView(this).apply { text = "Ready to record"; textSize = 14f; gravity = Gravity.CENTER; setPadding(20, 16, 20, 16) }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 28, 24, 24)
+            setBackgroundColor(0xFF10131B.toInt())
+        }
+        fun text(value: String, size: Float, color: Int = 0xFFFFFFFF.toInt()) = TextView(this).apply {
+            text = value; textSize = size; setTextColor(color); setPadding(4, 10, 4, 8)
+        }
+        root.addView(text("GLIP SCREEN MOD", 27f))
+        root.addView(text("PRO SCREEN RECORDER  •  ANDROID", 12f, 0xFF9BA7BC.toInt()))
+        status = text("Ready to record", 14f, 0xFF70E0AE.toInt())
+        root.addView(status)
+        root.addView(text("VIDEO QUALITY", 12f, 0xFF9BA7BC.toInt()))
+        resolution = spinner(listOf("Auto (recommended)", "480p", "720p HD", "1080p Full HD", "1440p 2K", "2160p 4K"))
+        root.addView(resolution)
+        root.addView(text("FRAME RATE", 12f, 0xFF9BA7BC.toInt()))
+        frameRate = spinner(listOf("Auto (recommended)", "24 FPS", "30 FPS", "60 FPS", "90 FPS", "120 FPS"))
+        root.addView(frameRate)
+        root.addView(text("VIDEO CODEC", 12f, 0xFF9BA7BC.toInt()))
+        codec = spinner(listOf("H.264 (most compatible)", "H.265 / HEVC (smaller file, if supported)"))
+        root.addView(codec)
+        root.addView(text("AUDIO SOURCE", 12f, 0xFF9BA7BC.toInt()))
         val choices = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
-        val internal = RadioButton(this).apply { id = 100; text = "Internal audio (Android 10+)"; isChecked = true }
-        val mic = RadioButton(this).apply { id = 101; text = "Microphone" }
-        val both = RadioButton(this).apply { id = 102; text = "Internal + microphone" }
-        choices.addView(internal); choices.addView(mic); choices.addView(both)
+        choices.addView(RadioButton(this).apply { id = 100; text = "Internal audio (Android 10+)"; setTextColor(0xFFFFFFFF.toInt()); isChecked = true })
+        choices.addView(RadioButton(this).apply { id = 101; text = "Microphone"; setTextColor(0xFFFFFFFF.toInt()) })
+        choices.addView(RadioButton(this).apply { id = 102; text = "Internal + microphone"; setTextColor(0xFFFFFFFF.toInt()) })
         choices.setOnCheckedChangeListener { _, checked ->
             selectedMode = when (checked) { 101 -> RecordingService.MODE_MIC; 102 -> RecordingService.MODE_BOTH; else -> RecordingService.MODE_INTERNAL }
         }
-        val start = Button(this).apply { text = "Start recording"; setOnClickListener { requestRecording() } }
-        val stop = Button(this).apply {
-            text = "Stop recording"
-            setOnClickListener {
-                val i = Intent(this@MainActivity, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP }
-                if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
-                status.text = "Stopping recording…"
-            }
+        root.addView(choices)
+        val start = Button(this).apply { text = "START RECORDING"; setOnClickListener { requestRecording() } }
+        val stop = Button(this).apply { text = "STOP RECORDING"; setOnClickListener {
+            val i = Intent(this@MainActivity, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP }
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+            status.text = "Stopping recording…"
+        } }
+        root.addView(start); root.addView(stop)
+        root.addView(text("GLIP automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
+        setContentView(root)
+    }
+
+    private fun spinner(items: List<String>): Spinner {
+        return Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, items)
+            setPadding(4, 4, 4, 8)
         }
-        val note = TextView(this).apply {
-            text = "Choose an audio source before recording. Internal audio depends on Android version and whether the app allows capture."
-            textSize = 12f; gravity = Gravity.CENTER; setPadding(20, 20, 20, 12)
-        }
-        setContentView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(24, 24, 24, 24)
-            addView(title); addView(subtitle); addView(status); addView(choices); addView(start); addView(stop); addView(note)
-        })
     }
 
     private fun requestRecording() {
@@ -65,7 +89,7 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == audioPermissionRequest) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) requestRecording()
-            else status.text = "Microphone/audio permission is required"
+            else status.text = "Audio permission not granted"
         }
     }
 
@@ -74,11 +98,16 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == captureRequest) {
             if (resultCode == RESULT_OK && data != null) {
+                val maxDimension = when (resolution.selectedItemPosition) { 1 -> 854; 2 -> 1280; 3 -> 1920; 4 -> 2560; 5 -> 3840; else -> 0 }
+                val requestedFps = when (frameRate.selectedItemPosition) { 1 -> 24; 2 -> 30; 3 -> 60; 4 -> 90; 5 -> 120; else -> 0 }
                 val serviceIntent = Intent(this, RecordingService::class.java).apply {
                     action = RecordingService.ACTION_START
                     putExtra(RecordingService.EXTRA_RESULT_CODE, resultCode)
                     putExtra(RecordingService.EXTRA_RESULT_DATA, data)
                     putExtra(RecordingService.EXTRA_AUDIO_MODE, selectedMode)
+                    putExtra(RecordingService.EXTRA_MAX_DIMENSION, maxDimension)
+                    putExtra(RecordingService.EXTRA_REQUESTED_FPS, requestedFps)
+                    putExtra(RecordingService.EXTRA_PREFER_HEVC, codec.selectedItemPosition == 1)
                 }
                 if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
                 status.text = "Recording started"
