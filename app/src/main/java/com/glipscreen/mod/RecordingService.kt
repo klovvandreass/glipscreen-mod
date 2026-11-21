@@ -50,6 +50,8 @@ class RecordingService : Service() {
     private var drainsStarted = false
     // Surface video timestamps use the device monotonic clock; normalize them to the audio timeline.
     private var recordingStartUs = 0L
+    private var pauseStartedUs = 0L
+    private var totalPausedUs = 0L
     private data class PendingSample(val isVideo: Boolean, val bytes: ByteArray, val pts: Long, val flags: Int)
     private val pendingSamples = ArrayList<PendingSample>()
     private var audioMode = MODE_INTERNAL
@@ -243,7 +245,7 @@ class RecordingService : Service() {
             duplicate.get(copy)
             // Video Surface timestamps are absolute monotonic time; AAC timestamps start at zero.
             // Put both tracks on one recording-relative timeline so MP4 duration is valid.
-            val normalizedPts = if (isVideo) (info.presentationTimeUs - recordingStartUs).coerceAtLeast(0L)
+            val normalizedPts = if (isVideo) (info.presentationTimeUs - recordingStartUs - totalPausedUs).coerceAtLeast(0L)
                 else info.presentationTimeUs
             if (!muxerStarted) {
                 pendingSamples.add(PendingSample(isVideo, copy, normalizedPts, info.flags))
@@ -397,12 +399,15 @@ class RecordingService : Service() {
 
     private fun pauseCapture() {
         if (stopping.get() || !paused.compareAndSet(false, true)) return
+        pauseStartedUs = System.nanoTime() / 1_000L
         try { virtualDisplay?.setSurface(null) } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Pause failed", e) }
         updateNotification()
     }
 
     private fun resumeCapture() {
         if (stopping.get() || !paused.compareAndSet(true, false)) return
+        if (pauseStartedUs > 0L) totalPausedUs += (System.nanoTime() / 1_000L - pauseStartedUs).coerceAtLeast(0L)
+        pauseStartedUs = 0L
         try { virtualDisplay?.setSurface(inputSurface) } catch (e: Exception) { paused.set(true); android.util.Log.e("GLIPRecorder", "Resume failed", e) }
         updateNotification()
     }
