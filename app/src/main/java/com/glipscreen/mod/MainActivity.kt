@@ -114,6 +114,7 @@ class MainActivity : Activity() {
         )
 
         // HOME
+        var navigateTo: (Int) -> Unit = {}
         val (homeScroll, home) = pageScroll()
         pages.addView(homeScroll)
         val header = LinearLayout(this).apply {
@@ -194,7 +195,7 @@ class MainActivity : Activity() {
             isAllCaps = false
             setTextColor(0xFFDCE9F8.toInt())
             background = surface(0xFF1A2D46.toInt(), 12, 0xFF304660.toInt())
-            setOnClickListener { showPage(2) }
+            setOnClickListener { navigateTo(2) }
         }
         quickCard.addView(openVideos, LinearLayout.LayoutParams(-1, dp(48)))
         home.addView(quickCard)
@@ -219,9 +220,35 @@ class MainActivity : Activity() {
         val audioCard = panel()
         audioCard.addView(section("AUDIO"))
         gap(audioCard, 10)
-        audioCard.addView(label("Audio source preferences", 16f, 0xFFFFFFFF.toInt(), true))
-        gap(audioCard, 5)
-        audioCard.addView(label("Internal audio and microphone options will be refined here.", 13f, 0xFF9FB2CB.toInt()))
+        audioCard.addView(label("Choose what should be captured.", 13f, 0xFF9FB2CB.toInt()))
+        gap(audioCard, 8)
+        val audioChoices = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        listOf(
+            "Internal audio" to RecordingService.MODE_INTERNAL,
+            "Microphone" to RecordingService.MODE_MIC,
+            "Internal + microphone" to RecordingService.MODE_BOTH
+        ).forEachIndexed { index, pair ->
+            audioChoices.addView(RadioButton(this).apply {
+                id = 200 + index
+                text = pair.first
+                textSize = 14f
+                setTextColor(0xFFDCE7F5.toInt())
+                isEnabled = index == 1 || Build.VERSION.SDK_INT >= 29
+            })
+        }
+        audioChoices.setOnCheckedChangeListener { _, checked ->
+            selectedMode = when (checked) {
+                201 -> RecordingService.MODE_MIC
+                202 -> RecordingService.MODE_BOTH
+                else -> RecordingService.MODE_INTERNAL
+            }
+        }
+        audioChoices.check(when (selectedMode) {
+            RecordingService.MODE_MIC -> 201
+            RecordingService.MODE_BOTH -> 202
+            else -> 200
+        })
+        audioCard.addView(audioChoices)
         settings.addView(audioCard)
         gap(settings, 14)
         val generalCard = panel()
@@ -304,12 +331,8 @@ class MainActivity : Activity() {
             navButtons.add(button)
             nav.addView(button, LinearLayout.LayoutParams(0, dp(50), 1f))
         }
+        navigateTo = { index -> selectPage(index) }
         selectPage(0)
-    }
-
-    private fun showPage(index: Int) {
-        // Navigation is driven by the bottom bar on the active screen.
-        // This method is kept as a no-op fallback for older click paths.
     }
 
     override fun onResume() {
