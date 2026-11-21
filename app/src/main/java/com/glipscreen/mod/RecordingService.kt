@@ -49,6 +49,9 @@ class RecordingService : Service() {
     private data class PendingSample(val isVideo: Boolean, val bytes: ByteArray, val pts: Long, val flags: Int)
     private val pendingSamples = ArrayList<PendingSample>()
     private var audioMode = MODE_INTERNAL
+    private var intentMaxDimension = 1920
+    private var intentRequestedFps = 0
+    private var preferHevc = false
     private var playbackRecord: AudioRecord? = null
     private var micRecord: AudioRecord? = null
 
@@ -71,6 +74,9 @@ class RecordingService : Service() {
         val data = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
             else { @Suppress("DEPRECATION") intent?.getParcelableExtra(EXTRA_RESULT_DATA) }
         audioMode = intent?.getIntExtra(EXTRA_AUDIO_MODE, MODE_INTERNAL) ?: MODE_INTERNAL
+        intentMaxDimension = intent?.getIntExtra(EXTRA_MAX_DIMENSION, 1920)?.takeIf { it > 0 } ?: 1920
+        intentRequestedFps = intent?.getIntExtra(EXTRA_REQUESTED_FPS, 0) ?: 0
+        preferHevc = intent?.getBooleanExtra(EXTRA_PREFER_HEVC, false) ?: false
         if (resultCode != 0 && data != null && projection == null) {
             try { beginCapture(resultCode, data) }
             catch (e: Exception) {
@@ -92,29 +98,38 @@ class RecordingService : Service() {
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(metrics)
-        val scale = minOf(1f, 1920f / maxOf(metrics.widthPixels, metrics.heightPixels))
+        val scale = minOf(1f, intentMaxDimension.toFloat() / maxOf(metrics.widthPixels, metrics.heightPixels))
         val width = ((metrics.widthPixels * scale).toInt() / 2) * 2
         val height = ((metrics.heightPixels * scale).toInt() / 2) * 2
 
-        val codecInfos = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter {
-            it.isEncoder && it.supportedTypes.any { type -> type.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }
+        val wantedMime = if (preferHevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
+        val allCodecs = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+        fun findEncoder(mime: String): MediaCodecInfo? {
+            val candidates = allCodecs.filter { info ->
+                info.isEncoder && info.supportedTypes.any { it.equals(mime, true) }
+            }.sortedByDescending { if (Build.VERSION.SDK_INT >= 29 && it.isHardwareAccelerated) 1 else 0 }
+            return candidates.firstOrNull { info ->
+                try {
+                    val caps = info.getCapabilitiesForType(mime).videoCapabilities
+                    val w = (width / caps.widthAlignment) * caps.widthAlignment
+                    val h = (height / caps.heightAlignment) * caps.heightAlignment
+                    caps.areSizeAndRateSupported(w, h, 24.0)
+                } catch (_: Exception) { false }
+            }
         }
-        val codecInfo = (if (Build.VERSION.SDK_INT >= 29) {
-            codecInfos.firstOrNull { it.isHardwareAccelerated } ?: codecInfos.firstOrNull()
-        } else codecInfos.firstOrNull())
-            ?: throw IllegalStateException("No AVC video encoder is available")
-        val videoCaps = codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).videoCapabilities
+        val codecInfo = findEncoder(wantedMime)
+            ?: if (wantedMime != MediaFormat.MIMETYPE_VIDEO_AVC) findEncoder(MediaFormat.MIMETYPE_VIDEO_AVC) else null
+            ?: throw IllegalStateException("No compatible video encoder for this device")
+        val mime = if (codecInfo.supportedTypes.any { it.equals(wantedMime, true) }) wantedMime else MediaFormat.MIMETYPE_VIDEO_AVC
+        val videoCaps = codecInfo.getCapabilitiesForType(mime).videoCapabilities
         val alignedWidth = (width / videoCaps.widthAlignment) * videoCaps.widthAlignment
         val alignedHeight = (height / videoCaps.heightAlignment) * videoCaps.heightAlignment
-        val fps = when {
-            videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, 60.0) -> 60
-            videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, 30.0) -> 30
-            videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, 24.0) -> 24
-            else -> throw IllegalStateException("This device cannot encode the selected screen size")
-        }
+        val fpsCandidates = if (intentRequestedFps > 0) listOf(intentRequestedFps, 60, 30, 24).distinct() else listOf(60, 30, 24)
+        val fps = fpsCandidates.firstOrNull { it >= 24 && videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, it.toDouble()) }
+            ?: throw IllegalStateException("This device cannot encode the selected screen size")
         val pixelRatio = (alignedWidth.toLong() * alignedHeight.toLong()).toDouble() / (1920.0 * 1080.0)
-        val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0).toInt().coerceIn(2_500_000, 16_000_000)
-        val vf = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, alignedWidth, alignedHeight).apply {
+        val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0).toLong().coerceIn(1_000_000L, 40_000_000L).toInt()
+        val vf = MediaFormat.createVideoFormat(mime, alignedWidth, alignedHeight).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
@@ -425,6 +440,9 @@ class RecordingService : Service() {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_AUDIO_MODE = "audio_mode"
+        const val EXTRA_MAX_DIMENSION = "max_dimension"
+        const val EXTRA_REQUESTED_FPS = "requested_fps"
+        const val EXTRA_PREFER_HEVC = "prefer_hevc"
         const val MODE_INTERNAL = 0
         const val MODE_MIC = 1
         const val MODE_BOTH = 2
