@@ -24,7 +24,7 @@ class MainActivity : Activity() {
     private lateinit var resolution: Spinner
     private lateinit var frameRate: Spinner
     private lateinit var codec: Spinner
-    private var selectedMode = RecordingService.MODE_INTERNAL
+    private var selectedMode = if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,9 +51,9 @@ class MainActivity : Activity() {
         root.addView(codec)
         root.addView(text("AUDIO SOURCE", 12f, 0xFF9BA7BC.toInt()))
         val choices = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
-        choices.addView(RadioButton(this).apply { id = 100; text = "Internal audio (Android 10+)"; setTextColor(0xFFFFFFFF.toInt()); isChecked = true })
-        choices.addView(RadioButton(this).apply { id = 101; text = "Microphone"; setTextColor(0xFFFFFFFF.toInt()) })
-        choices.addView(RadioButton(this).apply { id = 102; text = "Internal + microphone"; setTextColor(0xFFFFFFFF.toInt()) })
+        choices.addView(RadioButton(this).apply { id = 100; text = "Internal audio (Android 10+)"; setTextColor(0xFFFFFFFF.toInt()); isChecked = Build.VERSION.SDK_INT >= 29; isEnabled = Build.VERSION.SDK_INT >= 29 })
+        choices.addView(RadioButton(this).apply { id = 101; text = "Microphone"; setTextColor(0xFFFFFFFF.toInt()); isChecked = Build.VERSION.SDK_INT < 29 })
+        choices.addView(RadioButton(this).apply { id = 102; text = "Internal + microphone"; setTextColor(0xFFFFFFFF.toInt()); isEnabled = Build.VERSION.SDK_INT >= 29 })
         choices.setOnCheckedChangeListener { _, checked ->
             selectedMode = when (checked) { 101 -> RecordingService.MODE_MIC; 102 -> RecordingService.MODE_BOTH; else -> RecordingService.MODE_INTERNAL }
         }
