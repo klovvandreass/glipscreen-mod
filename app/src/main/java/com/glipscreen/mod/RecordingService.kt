@@ -81,7 +81,7 @@ class RecordingService : Service() {
             ACTION_RESUME -> { resumeCapture(); return START_NOT_STICKY }
         }
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("GLIP Screen MOD").setContentText("Recording • elapsed time")
+            .setContentTitle("Glip Screen").setContentText("Recording • elapsed time")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setWhen(System.currentTimeMillis()).setUsesChronometer(true)
             .setOngoing(true).build()
@@ -460,7 +460,7 @@ class RecordingService : Service() {
         val toggle = PendingIntent.getService(this, 1002, Intent(this, RecordingService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1003, Intent(this, RecordingService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("GLIP Screen MOD")
+            .setContentTitle("Glip Screen")
             .setContentText(if (paused.get()) "Recording paused" else "Recording • elapsed time")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setWhen(System.currentTimeMillis()).setUsesChronometer(!paused.get()).setOngoing(true)
