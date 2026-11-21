@@ -2,7 +2,9 @@ package com.glipscreen.mod
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
+import android.content.ContentUris
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -12,6 +14,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.RadioGroup
 import android.widget.RadioButton
 import android.widget.Spinner
@@ -65,6 +68,11 @@ class MainActivity : Activity() {
             status.text = "Stopping recording…"
         } }
         root.addView(start); root.addView(stop)
+        val gallery = Button(this).apply {
+            text = "MY RECORDINGS"
+            setOnClickListener { showRecordings() }
+        }
+        root.addView(gallery)
         root.addView(text("GLIP automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
         setContentView(root)
     }
@@ -74,6 +82,96 @@ class MainActivity : Activity() {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, items)
             setPadding(4, 4, 4, 8)
         }
+    }
+
+    private data class RecordingItem(val uri: Uri, val title: String, val details: String)
+
+    private fun showRecordings() {
+        val items = loadRecordings()
+        if (items.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("My recordings")
+                .setMessage("Belum ada video GLIP. Hasil rekaman tersimpan di Movies/GLIP MOD.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val list = ListView(this)
+        list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_2, android.R.id.text1,
+            items.map { it.title + "\\n" + it.details })
+        val dialog = AlertDialog.Builder(this).setTitle("MY RECORDINGS • ${items.size}")
+            .setView(list).setNegativeButton("CLOSE", null).create()
+        list.setOnItemClickListener { _, _, position, _ ->
+            val item = items[position]
+            AlertDialog.Builder(this).setTitle(item.title)
+                .setItems(arrayOf("Play video", "Share video", "Delete video")) { _, choice ->
+                    when (choice) {
+                        0 -> {
+                            val play = Intent(Intent.ACTION_VIEW).setDataAndType(item.uri, "video/mp4")
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            try { startActivity(play) } catch (_: Exception) {
+                                status.text = "No video player found"
+                            }
+                        }
+                        1 -> {
+                            val share = Intent(Intent.ACTION_SEND).apply {
+                                type = "video/mp4"; putExtra(Intent.EXTRA_STREAM, item.uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            startActivity(Intent.createChooser(share, "Share recording"))
+                        }
+                        2 -> AlertDialog.Builder(this).setMessage("Delete this recording?")
+                            .setNegativeButton("CANCEL", null)
+                            .setPositiveButton("DELETE") { _, _ ->
+                                try {
+                                    contentResolver.delete(item.uri, null, null)
+                                    status.text = "Recording deleted"
+                                    showRecordings()
+                                } catch (_: Exception) { status.text = "Could not delete recording" }
+                            }.show()
+                    }
+                }.show()
+        }
+        dialog.show()
+    }
+
+    private fun loadRecordings(): List<RecordingItem> {
+        val result = ArrayList<RecordingItem>()
+        val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.DATE_ADDED, MediaStore.Video.Media.DURATION,
+            MediaStore.Video.Media.SIZE
+        )
+        val selection: String
+        val args: Array<String>?
+        if (Build.VERSION.SDK_INT >= 29) {
+            selection = "${MediaStore.Video.Media.RELATIVE_PATH} = ?"
+            args = arrayOf("Movies/GLIP MOD/")
+        } else {
+            selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
+            args = arrayOf("GLIP_%")
+        }
+        try {
+            contentResolver.query(collection, projection, selection, args,
+                "${MediaStore.Video.Media.DATE_ADDED} DESC")?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                while (cursor.moveToNext()) {
+                    val uri = ContentUris.withAppendedId(collection, cursor.getLong(idCol))
+                    val name = cursor.getString(nameCol) ?: "GLIP recording"
+                    val seconds = cursor.getLong(durationCol) / 1000
+                    val sizeMb = cursor.getLong(sizeCol) / (1024.0 * 1024.0)
+                    val date = java.text.SimpleDateFormat("dd MMM yyyy • HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(cursor.getLong(dateCol) * 1000))
+                    result.add(RecordingItem(uri, name, "${date} • ${seconds}s • %.1f MB".format(sizeMb)))
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GLIPRecorder", "Gallery query failed", e)
+        }
+        return result
     }
 
     private fun requestRecording() {
