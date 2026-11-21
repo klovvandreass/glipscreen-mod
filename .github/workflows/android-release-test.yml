@@ -30,21 +30,29 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Check signing secrets
-        env:
-          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KSP: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KP: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          test -n "$KS" && test -n "$KSP" && test -n "$ALIAS" && test -n "$KP"
-
       - name: Decode signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/klovv-release.jks"
           test -s "$RUNNER_TEMP/klovv-release.jks"
+
+      - name: Diagnose keystore credentials
+        env:
+          KSP: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KP: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          echo "Checking keystore password and file format..."
+          keytool -list -keystore "$RUNNER_TEMP/klovv-release.jks" -storepass "$KSP" >/dev/null
+          echo "STORE_PASSWORD_OK"
+          echo "Checking configured alias..."
+          keytool -list -keystore "$RUNNER_TEMP/klovv-release.jks" -storepass "$KSP" -alias "$ALIAS" >/dev/null
+          echo "KEY_ALIAS_OK"
+          echo "Checking private-key password..."
+          keytool -certreq -keystore "$RUNNER_TEMP/klovv-release.jks" -storepass "$KSP" -alias "$ALIAS" -keypass "$KP" -file "$RUNNER_TEMP/klovv-test.csr" >/dev/null
+          echo "KEY_PASSWORD_OK"
 
       - name: Build signed release APK
         env:
