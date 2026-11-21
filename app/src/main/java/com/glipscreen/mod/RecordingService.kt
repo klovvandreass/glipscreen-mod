@@ -326,30 +326,8 @@ class RecordingService : Service() {
         var samples: Long = 0
         try {
             while (!stopping.get()) {
-                val playback = playbackRecord
-                val mic = micRecord
-                if (paused.get()) {
-                    if (playback != null) playback.read(playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING)
-                    if (mic != null) mic.read(micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING)
-                    Thread.sleep(10)
-                    continue
-                }
-                val pCount = if (playback != null) playback.read(
-                    playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING
-                ) else 0
-                val mCount = if (mic != null) mic.read(
-                    micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING
-                ) else 0
-                var count = when {
-                    playback != null && mic != null -> minOf(pCount.coerceAtLeast(0), mCount.coerceAtLeast(0))
-                    playback != null -> pCount.coerceAtLeast(0)
-                    else -> mCount.coerceAtLeast(0)
-                }
-                count -= count % 2
-                if (count <= 0) {
-                    Thread.sleep(2)
-                    continue
-                }
+                // Reserve an encoder input slot before reading PCM. This avoids consuming
+                // microphone/game audio and then throwing it away when the codec is busy.
                 val inputIndex = codec.dequeueInputBuffer(10000)
                 if (inputIndex < 0) continue
                 val input = codec.getInputBuffer(inputIndex)
@@ -358,6 +336,37 @@ class RecordingService : Service() {
                     continue
                 }
                 input.clear()
+                val playback = playbackRecord
+                val mic = micRecord
+                var count = 0
+                var playbackCount = 0
+                var micCount = 0
+                while (count <= 0 && !stopping.get()) {
+                    if (paused.get()) {
+                        if (playback != null) playback.read(playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING)
+                        if (mic != null) mic.read(micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING)
+                        Thread.sleep(10)
+                        continue
+                    }
+                    playbackCount = if (playback != null) playback.read(
+                        playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING
+                    ).coerceAtLeast(0) else 0
+                    micCount = if (mic != null) mic.read(
+                        micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING
+                    ).coerceAtLeast(0) else 0
+                    count = when {
+                        playback != null && mic != null -> minOf(playbackCount, micCount)
+                        playback != null -> playbackCount
+                        else -> micCount
+                    }
+                    count -= count % 2
+                    if (count <= 0) Thread.sleep(2)
+                }
+                if (stopping.get()) {
+                    codec.queueInputBuffer(inputIndex, 0, 0, samples * 1_000_000L / rate,
+                        MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                    break
+                }
                 count = minOf(count, input.remaining() / 2)
                 count -= count % 2
                 if (count <= 0) {
