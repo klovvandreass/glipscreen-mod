@@ -236,48 +236,80 @@ class RecordingService : Service() {
     private fun recordAudio() {
         val codec = audioEncoder ?: return
         val rate = 44100
-        val block = ShortArray(2048)
+        val playbackSamples = ShortArray(2048)
+        val micSamples = ShortArray(2048)
         var samples: Long = 0
         try {
             while (!stopping.get()) {
                 val playback = playbackRecord
                 val mic = micRecord
-                val pCount = if (playback != null) playback.read(block, 0, block.size) else 0
-                val p = if (pCount > 0) block.copyOf(pCount) else ShortArray(0)
-                val m = if (mic != null) {
-                    val temp = ShortArray(block.size)
-                    val n = mic.read(temp, 0, temp.size)
-                    if (n > 0) temp.copyOf(n) else ShortArray(0)
-                } else ShortArray(0)
-                val count = when {
-                    playback != null && mic != null -> minOf(p.size, m.size)
-                    playback != null -> p.size
-                    else -> m.size
+                val pCount = if (playback != null) playback.read(
+                    playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING
+                ) else 0
+                val mCount = if (mic != null) mic.read(
+                    micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING
+                ) else 0
+                var count = when {
+                    playback != null && mic != null -> minOf(pCount.coerceAtLeast(0), mCount.coerceAtLeast(0))
+                    playback != null -> pCount.coerceAtLeast(0)
+                    else -> mCount.coerceAtLeast(0)
                 }
-                if (count <= 0) continue
+                count -= count % 2
+                if (count <= 0) {
+                    Thread.sleep(2)
+                    continue
+                }
                 val inputIndex = codec.dequeueInputBuffer(10000)
                 if (inputIndex < 0) continue
-                val input = codec.getInputBuffer(inputIndex) ?: continue
+                val input = codec.getInputBuffer(inputIndex)
+                if (input == null) {
+                    codec.queueInputBuffer(inputIndex, 0, 0, samples * 1_000_000L / rate, 0)
+                    continue
+                }
                 input.clear()
+                count = minOf(count, input.remaining() / 2)
+                count -= count % 2
+                if (count <= 0) {
+                    codec.queueInputBuffer(inputIndex, 0, 0, samples * 1_000_000L / rate, 0)
+                    continue
+                }
                 for (i in 0 until count) {
-                    val value = if (playback != null && mic != null) ((p[i].toInt() + m[i].toInt()) / 2)
-                        else if (playback != null) p[i].toInt() else m[i].toInt()
+                    val value = when {
+                        playback != null && mic != null ->
+                            (playbackSamples[i].toInt() + micSamples[i].toInt()) / 2
+                        playback != null -> playbackSamples[i].toInt()
+                        else -> micSamples[i].toInt()
+                    }
                     input.putShort(value.coerceIn(-32768, 32767).toShort())
                 }
                 val pts = samples * 1_000_000L / rate
                 codec.queueInputBuffer(inputIndex, 0, count * 2, pts, 0)
                 samples += count / 2
             }
-        } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Audio capture failed", e) }
-        finally {
-            try {
-                val idx = codec.dequeueInputBuffer(10000)
-                if (idx >= 0) codec.queueInputBuffer(idx, 0, 0, samples * 1_000_000L / rate, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-            } catch (_: Exception) { }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } catch (e: Exception) {
+            android.util.Log.e("GLIPRecorder", "Audio capture failed", e)
+        } finally {
             try { playbackRecord?.stop() } catch (_: Exception) { }
             try { micRecord?.stop() } catch (_: Exception) { }
-            playbackRecord?.release(); playbackRecord = null
-            micRecord?.release(); micRecord = null
+            try { playbackRecord?.release() } catch (_: Exception) { }
+            playbackRecord = null
+            try { micRecord?.release() } catch (_: Exception) { }
+            micRecord = null
+            try {
+                var queued = false
+                while (!queued && !finished.get()) {
+                    val idx = codec.dequeueInputBuffer(10000)
+                    if (idx >= 0) {
+                        codec.queueInputBuffer(idx, 0, 0, samples * 1_000_000L / rate,
+                            MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        queued = true
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GLIPRecorder", "Could not signal audio EOS", e)
+            }
         }
     }
 
@@ -309,6 +341,8 @@ class RecordingService : Service() {
         if (!stopping.compareAndSet(false, true)) return
         try { virtualDisplay?.release() } catch (_: Exception) { }
         virtualDisplay = null
+        try { playbackRecord?.stop() } catch (_: Exception) { }
+        try { micRecord?.stop() } catch (_: Exception) { }
         if (!drainsStarted) {
             videoDone.set(true)
             audioDone.set(true)
