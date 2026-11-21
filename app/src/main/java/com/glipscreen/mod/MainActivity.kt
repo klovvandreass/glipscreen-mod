@@ -125,7 +125,7 @@ class MainActivity : Activity() {
         }
         val list = ListView(this)
         list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_2, android.R.id.text1,
-            items.map { it.title + "\\n" + it.details })
+            items.map { it.title + "\n" + it.details })
         val dialog = AlertDialog.Builder(this).setTitle("MY RECORDINGS • ${items.size}")
             .setView(list).setNegativeButton("CLOSE", null).create()
         list.setOnItemClickListener { _, _, position, _ ->
@@ -169,7 +169,7 @@ class MainActivity : Activity() {
                                     extractor.release()
                                     detected
                                 } catch (_: Exception) { null }
-                                "Resolution: ${w} × ${h}\\nFrame rate: ${fps?.let { "$it FPS" } ?: "Not available"}\\nBitrate: ${bitrate?.let { "$it kbps" } ?: "Not available"}\\n${item.details}"
+                                "Resolution: ${w} × ${h}\nFrame rate: ${fps?.let { "$it FPS" } ?: "Not available"}\nBitrate: ${bitrate?.let { "$it kbps" } ?: "Not available"}\n${item.details}"
                             } catch (_: Exception) { item.details } finally { try { retriever.release() } catch (_: Exception) { } }
                             AlertDialog.Builder(this).setTitle("VIDEO DETAILS").setMessage(info).setPositiveButton("OK", null).show()
                         }
@@ -218,8 +218,8 @@ class MainActivity : Activity() {
         val selection: String
         val args: Array<String>?
         if (Build.VERSION.SDK_INT >= 29) {
-            selection = "${MediaStore.Video.Media.RELATIVE_PATH} = ?"
-            args = arrayOf("Movies/Klovv Screen/")
+            selection = "(${MediaStore.Video.Media.RELATIVE_PATH} = ? OR ${MediaStore.Video.Media.RELATIVE_PATH} = ?)"
+            args = arrayOf("Movies/Klovv Screen/", "Movies/KLOVV MOD/")
         } else {
             selection = "${MediaStore.Video.Media.DISPLAY_NAME} LIKE ?"
             args = arrayOf("KLOVV_%")
