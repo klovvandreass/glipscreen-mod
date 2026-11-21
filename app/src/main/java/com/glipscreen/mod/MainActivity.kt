@@ -204,6 +204,35 @@ class MainActivity : Activity() {
         home.addView(hero)
         gap(home, 20)
 
+        home.addView(label("Game Launcher", 18f, 0xFFFFFFFF.toInt(), true))
+        gap(home, 4)
+        home.addView(label("Your favorite games, all in one place.", 13f, 0xFF8795AA.toInt()))
+        gap(home, 12)
+        val gameLauncherCard = panel().apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(15), dp(16), dp(15))
+        }
+        val gameIcon = TextView(this).apply {
+            text = "🎮"
+            textSize = 27f
+            gravity = Gravity.CENTER
+            background = surface(0xFF132B4B.toInt(), 15)
+            layoutParams = LinearLayout.LayoutParams(dp(58), dp(58))
+        }
+        gameLauncherCard.addView(gameIcon)
+        val gameLauncherText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(13), 0, 0, 0)
+            addView(label("Game shortcuts", 15f, 0xFFFFFFFF.toInt(), true))
+            gap(this, 4)
+            addView(label("Your game icons will appear here.", 12f, 0xFF9AA8BC.toInt()))
+        }
+        gameLauncherCard.addView(gameLauncherText, LinearLayout.LayoutParams(0, -2, 1f))
+        gameLauncherCard.addView(label("›", 27f, 0xFF6D9EDB.toInt(), true))
+        home.addView(gameLauncherCard)
+        gap(home, 20)
+
         home.addView(label("Quick settings", 18f, 0xFFFFFFFF.toInt(), true))
         gap(home, 4)
         home.addView(label("Tap any option to customize your recording.", 13f, 0xFF8795AA.toInt()))
