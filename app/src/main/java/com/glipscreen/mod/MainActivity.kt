@@ -45,7 +45,7 @@ class MainActivity : Activity() {
         fun text(value: String, size: Float, color: Int = 0xFFFFFFFF.toInt()) = TextView(this).apply {
             text = value; textSize = size; setTextColor(color); setPadding(4, 10, 4, 8)
         }
-        root.addView(text("GLIP SCREEN MOD", 27f))
+        root.addView(text("GLIP SCREEN", 27f))
         root.addView(text("PRO SCREEN RECORDER  •  ANDROID", 12f, 0xFF9BA7BC.toInt()))
         status = text("Ready to record", 14f, 0xFF70E0AE.toInt())
         root.addView(status)
