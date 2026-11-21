@@ -16,6 +16,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.RadioGroup
@@ -55,6 +56,10 @@ class MainActivity : Activity() {
         root.addView(text("VIDEO CODEC", 12f, 0xFF9BA7BC.toInt()))
         codec = spinner(listOf("H.264 (most compatible)", "H.265 / HEVC (smaller file, if supported)"))
         root.addView(codec)
+        val prefs = getSharedPreferences("glip_settings", MODE_PRIVATE)
+        resolution.setSelection(prefs.getInt("resolution", 0).coerceIn(0, 5))
+        frameRate.setSelection(prefs.getInt("fps", 0).coerceIn(0, 5))
+        codec.setSelection(prefs.getInt("codec", 0).coerceIn(0, 1))
         root.addView(text("AUDIO SOURCE", 12f, 0xFF9BA7BC.toInt()))
         val choices = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
         choices.addView(RadioButton(this).apply { id = 100; text = "Internal audio (Android 10+)"; setTextColor(0xFFFFFFFF.toInt()); isChecked = Build.VERSION.SDK_INT >= 29; isEnabled = Build.VERSION.SDK_INT >= 29 })
@@ -64,6 +69,7 @@ class MainActivity : Activity() {
             selectedMode = when (checked) { 101 -> RecordingService.MODE_MIC; 102 -> RecordingService.MODE_BOTH; else -> RecordingService.MODE_INTERNAL }
         }
         root.addView(choices)
+        choices.check(prefs.getInt("audio_mode", if (Build.VERSION.SDK_INT >= 29) 100 else 101))
         val start = Button(this).apply { text = "START RECORDING"; setOnClickListener { requestRecording() } }
         val stop = Button(this).apply { text = "STOP RECORDING"; setOnClickListener {
             val i = Intent(this@MainActivity, RecordingService::class.java).apply { action = RecordingService.ACTION_STOP }
@@ -78,6 +84,17 @@ class MainActivity : Activity() {
         root.addView(gallery)
         root.addView(text("GLIP automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
         setContentView(root)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::resolution.isInitialized && ::frameRate.isInitialized && ::codec.isInitialized) {
+            getSharedPreferences("glip_settings", MODE_PRIVATE).edit()
+                .putInt("resolution", resolution.selectedItemPosition)
+                .putInt("fps", frameRate.selectedItemPosition)
+                .putInt("codec", codec.selectedItemPosition)
+                .putInt("audio_mode", selectedMode).apply()
+        }
     }
 
     private fun spinner(items: List<String>): Spinner {
@@ -105,7 +122,7 @@ class MainActivity : Activity() {
         list.setOnItemClickListener { _, _, position, _ ->
             val item = items[position]
             AlertDialog.Builder(this).setTitle(item.title)
-                .setItems(arrayOf("Play video", "Share video", "Delete video")) { _, choice ->
+                .setItems(arrayOf("Play video", "Share video", "Video details", "Rename video", "Delete video")) { _, choice ->
                     when (choice) {
                         0 -> {
                             val play = Intent(Intent.ACTION_VIEW).setDataAndType(item.uri, "video/mp4")
@@ -121,7 +138,37 @@ class MainActivity : Activity() {
                             }
                             startActivity(Intent.createChooser(share, "Share recording"))
                         }
-                        2 -> AlertDialog.Builder(this).setMessage("Delete this recording?")
+                        2 -> {
+                            val retriever = android.media.MediaMetadataRetriever()
+                            val info = try {
+                                retriever.setDataSource(this, item.uri)
+                                val w = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH) ?: "?"
+                                val h = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT) ?: "?"
+                                val bitrate = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()?.div(1000)
+                                "Resolution: ${w} × ${h}\\nBitrate: ${bitrate?.let { "$it kbps" } ?: "Not available"}\\n${item.details}"
+                            } catch (_: Exception) { item.details } finally { try { retriever.release() } catch (_: Exception) { } }
+                            AlertDialog.Builder(this).setTitle("VIDEO DETAILS").setMessage(info).setPositiveButton("OK", null).show()
+                        }
+                        3 -> {
+                            val input = EditText(this).apply {
+                                setText(item.title.substringBeforeLast("."))
+                                hint = "Video name"
+                            }
+                            AlertDialog.Builder(this).setTitle("Rename recording").setView(input)
+                                .setNegativeButton("CANCEL", null)
+                                .setPositiveButton("SAVE") { _, _ ->
+                                    val newName = input.text.toString().trim().replace(Regex("[^A-Za-z0-9 _-]"), "")
+                                    if (newName.isNotBlank()) {
+                                        try {
+                                            val values = android.content.ContentValues().apply { put(MediaStore.Video.Media.DISPLAY_NAME, "$newName.mp4") }
+                                            contentResolver.update(item.uri, values, null, null)
+                                            status.text = "Recording renamed"
+                                            showRecordings()
+                                        } catch (_: Exception) { status.text = "Could not rename recording" }
+                                    }
+                                }.show()
+                        }
+                        4 -> AlertDialog.Builder(this).setMessage("Delete this recording?")
                             .setNegativeButton("CANCEL", null)
                             .setPositiveButton("DELETE") { _, _ ->
                                 try {
