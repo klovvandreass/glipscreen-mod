@@ -19,7 +19,9 @@ import android.os.Build
 import android.os.IBinder
 import android.util.DisplayMetrics
 import android.view.WindowManager
-import android.media.MediaScannerConnection
+import android.content.ContentValues
+import android.provider.MediaStore
+import android.os.ParcelFileDescriptor
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,7 +38,8 @@ class RecordingService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var encoder: MediaCodec? = null
     private var muxer: MediaMuxer? = null
-    private var outputFile: File? = null
+    private var outputUri: android.net.Uri? = null
+    private var outputDescriptor: ParcelFileDescriptor? = null
     private var videoTrack = -1
     private var muxerStarted = false
     private val stopping = AtomicBoolean(false)
@@ -122,14 +125,24 @@ class RecordingService : Service() {
         val inputSurface = encoder!!.createInputSurface()
         encoder!!.start()
 
-        val moviesDir = getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES)
-            ?: File(filesDir, "Movies")
-        if (!moviesDir.exists() && !moviesDir.mkdirs()) {
-            throw IllegalStateException("Cannot create output directory: $moviesDir")
-        }
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        outputFile = File(moviesDir, "GLIP_$stamp.mp4")
-        muxer = MediaMuxer(outputFile!!.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        val fileName = "GLIP_$stamp.mp4"
+        val values = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/GLIP MOD")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+        }
+        outputUri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("Unable to create video in Movies/GLIP MOD")
+        outputDescriptor = contentResolver.openFileDescriptor(outputUri!!, "w")
+            ?: throw IllegalStateException("Unable to open output video")
+        muxer = MediaMuxer(
+            outputDescriptor!!.fileDescriptor,
+            MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
+        )
 
         // Android 14+ requires a callback to be registered before createVirtualDisplay().
         projection!!.registerCallback(object : MediaProjection.Callback() {
@@ -241,14 +254,19 @@ class RecordingService : Service() {
         try { projection?.stop() } catch (_: Exception) { }
         projection = null
 
-        outputFile?.let { file ->
-            if (file.exists() && file.length() > 0L && muxerStarted) {
-                MediaScannerConnection.scanFile(
-                    this, arrayOf(file.absolutePath), arrayOf("video/mp4"), null
-                )
-                android.util.Log.i("GLIPRecorder", "Recording saved: ${file.absolutePath} (${file.length()} bytes)")
+        try { outputDescriptor?.close() } catch (_: Exception) { }
+        outputDescriptor = null
+        outputUri?.let { uri ->
+            if (muxerStarted) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val publish = ContentValues().apply {
+                        put(MediaStore.Video.Media.IS_PENDING, 0)
+                    }
+                    contentResolver.update(uri, publish, null, null)
+                }
+                android.util.Log.i("GLIPRecorder", "Recording saved to Movies/GLIP MOD: $uri")
             } else {
-                file.delete()
+                contentResolver.delete(uri, null, null)
                 android.util.Log.e("GLIPRecorder", "Recording produced no valid MP4 file")
             }
         }
