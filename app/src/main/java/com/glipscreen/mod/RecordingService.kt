@@ -70,7 +70,7 @@ class RecordingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel(CHANNEL_ID, "GLIP screen recording", NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(CHANNEL_ID, "KLOVV screen recording", NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
@@ -81,7 +81,7 @@ class RecordingService : Service() {
             ACTION_RESUME -> { resumeCapture(); return START_NOT_STICKY }
         }
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Glip Screen").setContentText("Recording • elapsed time")
+            .setContentTitle("Klovv Screen").setContentText("Recording • elapsed time")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setWhen(System.currentTimeMillis()).setUsesChronometer(true)
             .setOngoing(true).build()
@@ -97,7 +97,7 @@ class RecordingService : Service() {
         if (resultCode != 0 && data != null && projection == null) {
             try { beginCapture(resultCode, data) }
             catch (e: Exception) {
-                android.util.Log.e("GLIPRecorder", "Start failed", e)
+                android.util.Log.e("KLOVVRecorder", "Start failed", e)
                 requestStop()
                 if (!drainsStarted) {
                     videoDone.set(true)
@@ -166,10 +166,10 @@ class RecordingService : Service() {
 
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, "GLIP_$stamp.mp4")
+            put(MediaStore.Video.Media.DISPLAY_NAME, "KLOVV_$stamp.mp4")
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT >= 29) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/GLIP MOD")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/KLOVV MOD")
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -184,12 +184,12 @@ class RecordingService : Service() {
             override fun onStop() { requestStop() }
         }, null)
         recordingStartUs = System.nanoTime() / 1_000L
-        virtualDisplay = projection!!.createVirtualDisplay("GLIPScreenCapture", alignedWidth, alignedHeight,
+        virtualDisplay = projection!!.createVirtualDisplay("KLOVVScreenCapture", alignedWidth, alignedHeight,
             metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null)
         showFloatingControls()
-        thread(name = "GLIP-Video-Drain") { drainVideo() }
-        thread(name = "GLIP-Audio-Record") { recordAudio() }
-        thread(name = "GLIP-Audio-Drain") { drainAudio() }
+        thread(name = "KLOVV-Video-Drain") { drainVideo() }
+        thread(name = "KLOVV-Audio-Record") { recordAudio() }
+        thread(name = "KLOVV-Audio-Drain") { drainAudio() }
         drainsStarted = true
     }
 
@@ -314,7 +314,7 @@ class RecordingService : Service() {
                     }
                 }
             }
-        } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Video drain failed", e) }
+        } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Video drain failed", e) }
         finally { videoDone.set(true); maybeFinish() }
     }
 
@@ -389,7 +389,7 @@ class RecordingService : Service() {
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            android.util.Log.e("GLIPRecorder", "Audio capture failed", e)
+            android.util.Log.e("KLOVVRecorder", "Audio capture failed", e)
         } finally {
             try { playbackRecord?.stop() } catch (_: Exception) { }
             try { micRecord?.stop() } catch (_: Exception) { }
@@ -408,7 +408,7 @@ class RecordingService : Service() {
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("GLIPRecorder", "Could not signal audio EOS", e)
+                android.util.Log.e("KLOVVRecorder", "Could not signal audio EOS", e)
             }
         }
     }
@@ -433,14 +433,14 @@ class RecordingService : Service() {
                     }
                 }
             }
-        } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Audio encoder drain failed", e) }
+        } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Audio encoder drain failed", e) }
         finally { audioDone.set(true); maybeFinish() }
     }
 
     private fun pauseCapture() {
         if (stopping.get() || !paused.compareAndSet(false, true)) return
         pauseStartedUs = System.nanoTime() / 1_000L
-        try { virtualDisplay?.setSurface(null) } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Pause failed", e) }
+        try { virtualDisplay?.setSurface(null) } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Pause failed", e) }
         updateNotification()
         updateFloatingControls()
     }
@@ -449,7 +449,7 @@ class RecordingService : Service() {
         if (stopping.get() || !paused.compareAndSet(true, false)) return
         if (pauseStartedUs > 0L) totalPausedUs += (System.nanoTime() / 1_000L - pauseStartedUs).coerceAtLeast(0L)
         pauseStartedUs = 0L
-        try { virtualDisplay?.setSurface(inputSurface) } catch (e: Exception) { paused.set(true); android.util.Log.e("GLIPRecorder", "Resume failed", e) }
+        try { virtualDisplay?.setSurface(inputSurface) } catch (e: Exception) { paused.set(true); android.util.Log.e("KLOVVRecorder", "Resume failed", e) }
         updateNotification()
         updateFloatingControls()
     }
@@ -460,7 +460,7 @@ class RecordingService : Service() {
         val toggle = PendingIntent.getService(this, 1002, Intent(this, RecordingService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1003, Intent(this, RecordingService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Glip Screen")
+            .setContentTitle("Klovv Screen")
             .setContentText(if (paused.get()) "Recording paused" else "Recording • elapsed time")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setWhen(System.currentTimeMillis()).setUsesChronometer(!paused.get()).setOngoing(true)
@@ -473,7 +473,7 @@ class RecordingService : Service() {
         if (Build.VERSION.SDK_INT < 26 || !android.provider.Settings.canDrawOverlays(this)) return
         try {
             val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 10, 12, 10); setBackgroundColor(0xEE111827.toInt()) }
-            val title = android.widget.TextView(this).apply { text = "GLIP • RECORDING"; textSize = 12f; setTextColor(0xFF80B7FF.toInt()); setPadding(8, 4, 8, 8) }
+            val title = android.widget.TextView(this).apply { text = "KLOVV • RECORDING"; textSize = 12f; setTextColor(0xFF80B7FF.toInt()); setPadding(8, 4, 8, 8) }
             floatingPauseButton = Button(this).apply { text = "PAUSE"; setOnClickListener {
                 val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
                 startService(Intent(this@RecordingService, RecordingService::class.java).setAction(action))
@@ -484,7 +484,7 @@ class RecordingService : Service() {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             windowManager?.addView(panel, params)
             floatingPanel = panel
-        } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Floating controls unavailable", e) }
+        } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Floating controls unavailable", e) }
     }
     private fun updateFloatingControls() { floatingPauseButton?.text = if (paused.get()) "RESUME" else "PAUSE" }
     private fun removeFloatingControls() {
@@ -518,7 +518,7 @@ class RecordingService : Service() {
         try { audioEncoder?.stop() } catch (_: Exception) { }
         try { audioEncoder?.release() } catch (_: Exception) { }
         audioEncoder = null
-        try { if (muxerStarted) muxer?.stop() } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Muxer finalization failed", e) }
+        try { if (muxerStarted) muxer?.stop() } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Muxer finalization failed", e) }
         try { muxer?.release() } catch (_: Exception) { }
         muxer = null
         try { playbackRecord?.stop() } catch (_: Exception) { }
@@ -536,7 +536,7 @@ class RecordingService : Service() {
                 if (Build.VERSION.SDK_INT >= 29) contentResolver.update(uri, ContentValues().apply {
                     put(MediaStore.Video.Media.IS_PENDING, 0)
                 }, null, null)
-                android.util.Log.i("GLIPRecorder", "Saved: $uri")
+                android.util.Log.i("KLOVVRecorder", "Saved: $uri")
             } else contentResolver.delete(uri, null, null)
         }
         removeFloatingControls()
