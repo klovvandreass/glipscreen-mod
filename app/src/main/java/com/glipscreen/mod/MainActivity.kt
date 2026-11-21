@@ -259,7 +259,8 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 26 && !Settings.canDrawOverlays(this)) {
             status.text = "Floating controls unavailable; notification controls will remain available"
         }
-        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if ((selectedMode == RecordingService.MODE_MIC || selectedMode == RecordingService.MODE_BOTH) &&
+            Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioPermissionRequest)
             return
         }
