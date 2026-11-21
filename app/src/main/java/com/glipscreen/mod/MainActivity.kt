@@ -270,8 +270,23 @@ class MainActivity : Activity() {
                     putExtra(RecordingService.EXTRA_REQUESTED_FPS, requestedFps)
                     putExtra(RecordingService.EXTRA_PREFER_HEVC, codec.selectedItemPosition == 1)
                 }
-                if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
-                status.text = "Recording started"
+                val delaySeconds = when (countdown.selectedItemPosition) { 1 -> 3; 2 -> 5; 3 -> 10; else -> 0 }
+                if (delaySeconds == 0) {
+                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+                    status.text = "Recording started"
+                } else {
+                    object : android.os.CountDownTimer(delaySeconds * 1000L, 1000L) {
+                        override fun onTick(millisUntilFinished: Long) {
+                            status.text = "Recording starts in " + ((millisUntilFinished + 999) / 1000) + " seconds"
+                        }
+                        override fun onFinish() {
+                            if (!isFinishing) {
+                                if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+                                status.text = "Recording started"
+                            }
+                        }
+                    }.start()
+                }
             } else status.text = "Screen-capture permission cancelled"
         }
     }
