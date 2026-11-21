@@ -61,8 +61,10 @@ class RecordingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { requestStop(); return START_NOT_STICKY }
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("GLIP Screen MOD").setContentText("Screen recording is active")
-            .setSmallIcon(android.R.drawable.presence_video_online).setOngoing(true).build()
+            .setContentTitle("GLIP Screen MOD").setContentText("Recording • elapsed time")
+            .setSmallIcon(android.R.drawable.presence_video_online)
+            .setWhen(System.currentTimeMillis()).setUsesChronometer(true)
+            .setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         else startForeground(NOTIFICATION_ID, notification)
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
