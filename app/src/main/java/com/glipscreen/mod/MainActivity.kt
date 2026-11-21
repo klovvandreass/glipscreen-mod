@@ -90,7 +90,8 @@ class MainActivity : Activity() {
         }
         root.addView(gallery)
         root.addView(text("Klovv Screen automatically adjusts settings to the hardware capabilities of each Android device. Unsupported options fall back safely.", 12f, 0xFF9BA7BC.toInt()))
-        setContentView(root)
+        val scroll = android.widget.ScrollView(this).apply { isFillViewport = true; addView(root) }
+        setContentView(scroll)
     }
 
     override fun onPause() {
