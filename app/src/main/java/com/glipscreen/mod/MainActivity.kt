@@ -307,6 +307,7 @@ class MainActivity : Activity() {
     private fun requestRecording() {
         if (captureFlowActive || countdownTimer != null) return
         captureFlowActive = true
+        startButton.isEnabled = false
         continueRecordingPermissionFlow()
     }
 
@@ -346,6 +347,7 @@ class MainActivity : Activity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) continueRecordingPermissionFlow()
             else {
                 captureFlowActive = false
+                startButton.isEnabled = true
                 status.text = "Audio permission not granted"
             }
         } else if (requestCode == notificationPermissionRequest) {
