@@ -175,6 +175,7 @@ class RecordingService : Service() {
         val qualityMultiplier = when (intentQuality) { 0 -> 0.70; 2 -> 1.35; else -> 1.0 }
         val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0 * qualityMultiplier)
             .toLong().coerceIn(1_000_000L, 40_000_000L).toInt()
+        android.util.Log.i("KLOVVRecorder", "Video config: codec=${codecInfo.name}, mime=$mime, hardware=${Build.VERSION.SDK_INT >= 29 && codecInfo.isHardwareAccelerated}, size=${alignedWidth}x${alignedHeight}, fps=$fps, bitrate=${bitrate / 1000}kbps, quality=$intentQuality")
         val encoderCaps = codecInfo.getCapabilitiesForType(mime).encoderCapabilities
         fun createVideoFormat(useOptionalHints: Boolean): MediaFormat =
             MediaFormat.createVideoFormat(mime, alignedWidth, alignedHeight).apply {
@@ -302,6 +303,7 @@ class RecordingService : Service() {
             }
             // Anchor captured PCM to the same monotonic clock used by Surface video PTS.
             audioCaptureStartUs = System.nanoTime() / 1_000L
+            android.util.Log.i("KLOVVRecorder", "Audio config: mode=$audioMode, sampleRate=$rate, channels=2, timelineOffset=${audioCaptureStartUs - recordingStartUs}us")
         } catch (e: Exception) {
             sources.forEach { try { it.stop() } catch (_: Exception) { }; try { it.release() } catch (_: Exception) { } }
             playbackRecord = null
