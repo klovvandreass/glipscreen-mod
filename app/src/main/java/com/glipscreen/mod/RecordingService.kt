@@ -92,13 +92,31 @@ class RecordingService : Service() {
         val width = ((metrics.widthPixels * scale).toInt() / 2) * 2
         val height = ((metrics.heightPixels * scale).toInt() / 2) * 2
 
-        val vf = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+        val codecInfos = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter {
+            it.isEncoder && it.supportedTypes.any { type -> type.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }
+        }
+        val codecInfo = if (Build.VERSION.SDK_INT >= 29) {
+            codecInfos.firstOrNull { it.isHardwareAccelerated } ?: codecInfos.firstOrNull()
+        } else codecInfos.firstOrNull()
+            ?: throw IllegalStateException("No AVC video encoder is available")
+        val videoCaps = codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).videoCapabilities
+        val alignedWidth = (width / videoCaps.widthAlignment) * videoCaps.widthAlignment
+        val alignedHeight = (height / videoCaps.heightAlignment) * videoCaps.heightAlignment
+        val fps = when {
+            videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, 60.0) -> 60
+            videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, 30.0) -> 30
+            videoCaps.areSizeAndRateSupported(alignedWidth, alignedHeight, 24.0) -> 24
+            else -> throw IllegalStateException("This device cannot encode the selected screen size")
+        }
+        val pixelRatio = (alignedWidth.toLong() * alignedHeight.toLong()).toDouble() / (1920.0 * 1080.0)
+        val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0).toInt().coerceIn(2_500_000, 16_000_000)
+        val vf = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, alignedWidth, alignedHeight).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, 10_000_000)
-            setInteger(MediaFormat.KEY_FRAME_RATE, 60)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
         }
-        videoEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
+        videoEncoder = MediaCodec.createByCodecName(codecInfo.name).apply {
             configure(vf, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         }
         val surface = videoEncoder!!.createInputSurface()
