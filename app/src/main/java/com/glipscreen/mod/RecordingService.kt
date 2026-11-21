@@ -3,6 +3,7 @@ package com.glipscreen.mod
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.ContentValues
 import android.content.Context
@@ -20,6 +21,7 @@ import android.provider.MediaStore
 import android.os.ParcelFileDescriptor
 import android.util.DisplayMetrics
 import android.view.WindowManager
+import android.view.Surface
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -29,6 +31,8 @@ import kotlin.concurrent.thread
 class RecordingService : Service() {
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
+    private var inputSurface: Surface? = null
+    private val paused = AtomicBoolean(false)
     private var videoEncoder: MediaCodec? = null
     private var audioEncoder: MediaCodec? = null
     private var muxer: MediaMuxer? = null
@@ -62,7 +66,11 @@ class RecordingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) { requestStop(); return START_NOT_STICKY }
+        when (intent?.action) {
+            ACTION_STOP -> { requestStop(); return START_NOT_STICKY }
+            ACTION_PAUSE -> { pauseCapture(); return START_NOT_STICKY }
+            ACTION_RESUME -> { resumeCapture(); return START_NOT_STICKY }
+        }
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("GLIP Screen MOD").setContentText("Recording • elapsed time")
             .setSmallIcon(android.R.drawable.presence_video_online)
@@ -139,6 +147,7 @@ class RecordingService : Service() {
             configure(vf, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         }
         val surface = videoEncoder!!.createInputSurface()
+        inputSurface = surface
         videoEncoder!!.start()
 
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -286,6 +295,12 @@ class RecordingService : Service() {
             while (!stopping.get()) {
                 val playback = playbackRecord
                 val mic = micRecord
+                if (paused.get()) {
+                    if (playback != null) playback.read(playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING)
+                    if (mic != null) mic.read(micSamples, 0, micSamples.size, AudioRecord.READ_NON_BLOCKING)
+                    Thread.sleep(10)
+                    continue
+                }
                 val pCount = if (playback != null) playback.read(
                     playbackSamples, 0, playbackSamples.size, AudioRecord.READ_NON_BLOCKING
                 ) else 0
@@ -380,10 +395,38 @@ class RecordingService : Service() {
         finally { audioDone.set(true); maybeFinish() }
     }
 
+    private fun pauseCapture() {
+        if (stopping.get() || !paused.compareAndSet(false, true)) return
+        try { virtualDisplay?.setSurface(null) } catch (e: Exception) { android.util.Log.e("GLIPRecorder", "Pause failed", e) }
+        updateNotification()
+    }
+
+    private fun resumeCapture() {
+        if (stopping.get() || !paused.compareAndSet(true, false)) return
+        try { virtualDisplay?.setSurface(inputSurface) } catch (e: Exception) { paused.set(true); android.util.Log.e("GLIPRecorder", "Resume failed", e) }
+        updateNotification()
+    }
+
+    private fun updateNotification() {
+        val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
+        val label = if (paused.get()) "Resume" else "Pause"
+        val toggle = PendingIntent.getService(this, 1002, Intent(this, RecordingService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getService(this, 1003, Intent(this, RecordingService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle("GLIP Screen MOD")
+            .setContentText(if (paused.get()) "Recording paused" else "Recording • elapsed time")
+            .setSmallIcon(android.R.drawable.presence_video_online)
+            .setWhen(System.currentTimeMillis()).setUsesChronometer(!paused.get()).setOngoing(true)
+            .addAction(Notification.Action.Builder(null, label, toggle).build())
+            .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+    }
+
     private fun requestStop() {
         if (!stopping.compareAndSet(false, true)) return
         try { virtualDisplay?.release() } catch (_: Exception) { }
         virtualDisplay = null
+        inputSurface = null
         try { playbackRecord?.stop() } catch (_: Exception) { }
         try { micRecord?.stop() } catch (_: Exception) { }
         if (!drainsStarted) {
@@ -437,6 +480,8 @@ class RecordingService : Service() {
     companion object {
         const val ACTION_START = "com.glipscreen.mod.START"
         const val ACTION_STOP = "com.glipscreen.mod.STOP"
+        const val ACTION_PAUSE = "com.glipscreen.mod.PAUSE"
+        const val ACTION_RESUME = "com.glipscreen.mod.RESUME"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_AUDIO_MODE = "audio_mode"
