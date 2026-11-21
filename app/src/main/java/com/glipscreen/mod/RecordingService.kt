@@ -23,6 +23,7 @@ import android.util.DisplayMetrics
 import android.view.WindowManager
 import android.view.Surface
 import android.view.View
+import android.view.MotionEvent
 import android.graphics.PixelFormat
 import android.widget.Button
 import android.widget.LinearLayout
@@ -151,6 +152,11 @@ class RecordingService : Service() {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            // Ask the hardware encoder to prioritize real-time capture where supported.
+            if (Build.VERSION.SDK_INT >= 23) {
+                setInteger(MediaFormat.KEY_PRIORITY, 0)
+                setInteger(MediaFormat.KEY_OPERATING_RATE, fps)
+            }
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
             // Prefer a predictable real-time bitrate when the hardware encoder supports CBR.
             if (encoderCaps.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)) {
@@ -481,6 +487,27 @@ class RecordingService : Service() {
             val stop = Button(this).apply { text = "STOP"; setOnClickListener { startService(Intent(this@RecordingService, RecordingService::class.java).setAction(ACTION_STOP)) } }
             panel.addView(title); panel.addView(floatingPauseButton); panel.addView(stop)
             val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL; x = 12 }
+            // Drag the floating panel by its title without blocking the Pause/Stop buttons.
+            var downX = 0f
+            var downY = 0f
+            var startX = 0
+            var startY = 0
+            title.setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = event.rawX; downY = event.rawY
+                        startX = params.x; startY = params.y
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        params.x = (startX - (event.rawX - downX).toInt()).coerceAtLeast(0)
+                        params.y = (startY + (event.rawY - downY).toInt()).coerceAtLeast(0)
+                        try { windowManager?.updateViewLayout(panel, params) } catch (_: Exception) { }
+                        true
+                    }
+                    else -> true
+                }
+            }
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             windowManager?.addView(panel, params)
             floatingPanel = panel
