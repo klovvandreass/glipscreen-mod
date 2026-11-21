@@ -70,7 +70,7 @@ class RecordingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel(CHANNEL_ID, "KLOVV screen recording", NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(CHANNEL_ID, "Klovv Screen recording", NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
@@ -166,10 +166,10 @@ class RecordingService : Service() {
 
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, "KLOVV_$stamp.mp4")
+            put(MediaStore.Video.Media.DISPLAY_NAME, "Klovv_$stamp.mp4")
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT >= 29) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/KLOVV MOD")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/Klovv Screen")
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -473,7 +473,7 @@ class RecordingService : Service() {
         if (Build.VERSION.SDK_INT < 26 || !android.provider.Settings.canDrawOverlays(this)) return
         try {
             val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 10, 12, 10); setBackgroundColor(0xEE111827.toInt()) }
-            val title = android.widget.TextView(this).apply { text = "KLOVV • RECORDING"; textSize = 12f; setTextColor(0xFF80B7FF.toInt()); setPadding(8, 4, 8, 8) }
+            val title = android.widget.TextView(this).apply { text = "KLOVV SCREEN • RECORDING"; textSize = 12f; setTextColor(0xFF80B7FF.toInt()); setPadding(8, 4, 8, 8) }
             floatingPauseButton = Button(this).apply { text = "PAUSE"; setOnClickListener {
                 val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
                 startService(Intent(this@RecordingService, RecordingService::class.java).setAction(action))
