@@ -398,7 +398,7 @@ class RecordingService : Service() {
                 if (inputIndex < 0) continue
                 val input = codec.getInputBuffer(inputIndex)
                 if (input == null) {
-                    codec.queueInputBuffer(inputIndex, 0, 0, samples * 1_000_000L / rate, 0)
+                    codec.queueInputBuffer(inputIndex, 0, 0, audioPtsUs(samples, rate), 0)
                     continue
                 }
                 input.clear()
@@ -429,7 +429,7 @@ class RecordingService : Service() {
                     if (count <= 0) Thread.sleep(2)
                 }
                 if (stopping.get()) {
-                    codec.queueInputBuffer(inputIndex, 0, 0, samples * 1_000_000L / rate,
+                    codec.queueInputBuffer(inputIndex, 0, 0, audioPtsUs(samples, rate),
                         MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                     eosQueued = true
                     break
@@ -437,7 +437,7 @@ class RecordingService : Service() {
                 count = minOf(count, input.remaining() / 2)
                 count -= count % 2
                 if (count <= 0) {
-                    codec.queueInputBuffer(inputIndex, 0, 0, samples * 1_000_000L / rate, 0)
+                    codec.queueInputBuffer(inputIndex, 0, 0, audioPtsUs(samples, rate), 0)
                     continue
                 }
                 for (i in 0 until count) {
@@ -449,7 +449,7 @@ class RecordingService : Service() {
                     }
                     input.putShort(value.coerceIn(-32768, 32767).toShort())
                 }
-                val pts = samples * 1_000_000L / rate
+                val pts = audioPtsUs(samples, rate)
                 codec.queueInputBuffer(inputIndex, 0, count * 2, pts, 0)
                 samples += count / 2
             }
@@ -470,7 +470,7 @@ class RecordingService : Service() {
                 while (!queued && !finished.get() && System.nanoTime() < eosDeadlineNs) {
                     val idx = codec.dequeueInputBuffer(10000)
                     if (idx >= 0) {
-                        codec.queueInputBuffer(idx, 0, 0, samples * 1_000_000L / rate,
+                        codec.queueInputBuffer(idx, 0, 0, audioPtsUs(samples, rate),
                             MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                         queued = true
                     }
