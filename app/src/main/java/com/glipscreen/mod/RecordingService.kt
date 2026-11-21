@@ -53,7 +53,7 @@ class RecordingService : Service() {
     private val audioDone = AtomicBoolean(false)
     private val finished = AtomicBoolean(false)
     private val videoEosSignaled = AtomicBoolean(false)
-    private var drainsStarted = false
+    @Volatile private var drainsStarted = false
     // Surface video timestamps use the device monotonic clock; normalize them to the audio timeline.
     private var recordingStartUs = 0L
     private var pauseStartedUs = 0L
@@ -85,13 +85,8 @@ class RecordingService : Service() {
             ACTION_PAUSE -> { pauseCapture(); return START_NOT_STICKY }
             ACTION_RESUME -> { resumeCapture(); return START_NOT_STICKY }
         }
-        val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Klovv Screen").setContentText("Recording • elapsed time")
-            .setSmallIcon(android.R.drawable.presence_video_online)
-            .setWhen(System.currentTimeMillis()).setUsesChronometer(true)
-            .setOngoing(true).build()
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-        else startForeground(NOTIFICATION_ID, notification)
+        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, createRecordingNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        else startForeground(NOTIFICATION_ID, createRecordingNotification())
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
         val data = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
             else { @Suppress("DEPRECATION") intent?.getParcelableExtra(EXTRA_RESULT_DATA) }
@@ -100,7 +95,13 @@ class RecordingService : Service() {
         intentRequestedFps = intent?.getIntExtra(EXTRA_REQUESTED_FPS, 0) ?: 0
         intentQuality = (intent?.getIntExtra(EXTRA_QUALITY, 1) ?: 1).coerceIn(0, 2)
         preferHevc = intent?.getBooleanExtra(EXTRA_PREFER_HEVC, false) ?: false
-        if (resultCode != 0 && data != null && projection == null) {
+        if (resultCode == 0 || data == null) {
+            android.util.Log.e("KLOVVRecorder", "Recording start rejected: missing screen-capture permission data")
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (projection == null) {
             try { beginCapture(resultCode, data) }
             catch (e: Exception) {
                 android.util.Log.e("KLOVVRecorder", "Start failed", e)
@@ -231,10 +232,12 @@ class RecordingService : Service() {
         virtualDisplay = projection!!.createVirtualDisplay("KLOVVScreenCapture", alignedWidth, alignedHeight,
             metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null)
         showFloatingControls()
+        // Mark the drain pipeline active before launching workers so an immediate
+        // Stop cannot mistake a just-started recording for an uninitialized session.
+        drainsStarted = true
         thread(name = "KLOVV-Video-Drain") { drainVideo() }
         thread(name = "KLOVV-Audio-Record") { recordAudio() }
         thread(name = "KLOVV-Audio-Drain") { drainAudio() }
-        drainsStarted = true
     }
 
     private fun setupAudio() {
@@ -503,19 +506,22 @@ class RecordingService : Service() {
         updateFloatingControls()
     }
 
-    private fun updateNotification() {
+    private fun createRecordingNotification(): Notification {
         val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
         val label = if (paused.get()) "Resume" else "Pause"
         val toggle = PendingIntent.getService(this, 1002, Intent(this, RecordingService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1003, Intent(this, RecordingService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = Notification.Builder(this, CHANNEL_ID)
+        return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Klovv Screen")
             .setContentText(if (paused.get()) "Recording paused" else "Recording • elapsed time")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setWhen(System.currentTimeMillis()).setUsesChronometer(!paused.get()).setOngoing(true)
             .addAction(Notification.Action.Builder(null, label, toggle).build())
             .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun updateNotification() {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, createRecordingNotification())
     }
 
     private fun showFloatingControls() {
