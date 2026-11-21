@@ -86,12 +86,21 @@ class RecordingService : Service() {
             ACTION_PAUSE -> { pauseCapture(); return START_NOT_STICKY }
             ACTION_RESUME -> { resumeCapture(); return START_NOT_STICKY }
         }
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, createRecordingNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-        else startForeground(NOTIFICATION_ID, createRecordingNotification())
+        audioMode = intent?.getIntExtra(EXTRA_AUDIO_MODE, MODE_INTERNAL) ?: MODE_INTERNAL
+        if (Build.VERSION.SDK_INT >= 34) {
+            var foregroundTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            if (audioMode == MODE_MIC || audioMode == MODE_BOTH) {
+                foregroundTypes = foregroundTypes or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+            startForeground(NOTIFICATION_ID, createRecordingNotification(), foregroundTypes)
+        } else if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(NOTIFICATION_ID, createRecordingNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(NOTIFICATION_ID, createRecordingNotification())
+        }
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
         val data = if (Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
             else { @Suppress("DEPRECATION") intent?.getParcelableExtra(EXTRA_RESULT_DATA) }
-        audioMode = intent?.getIntExtra(EXTRA_AUDIO_MODE, MODE_INTERNAL) ?: MODE_INTERNAL
         intentMaxDimension = intent?.getIntExtra(EXTRA_MAX_DIMENSION, 0)?.coerceAtLeast(0) ?: 0
         intentRequestedFps = intent?.getIntExtra(EXTRA_REQUESTED_FPS, 0) ?: 0
         intentQuality = (intent?.getIntExtra(EXTRA_QUALITY, 1) ?: 1).coerceIn(0, 2)
