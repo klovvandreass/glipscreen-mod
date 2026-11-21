@@ -5,6 +5,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
+import android.provider.MediaStore
+import android.provider.Settings
 import android.content.ContentUris
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
