@@ -190,8 +190,8 @@ class MainActivity : Activity() {
                                 val w = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH) ?: "?"
                                 val h = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT) ?: "?"
                                 val bitrate = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()?.div(1000)
+                                val extractor = android.media.MediaExtractor()
                                 val fps = try {
-                                    val extractor = android.media.MediaExtractor()
                                     extractor.setDataSource(this, item.uri, null)
                                     var detected: String? = null
                                     for (track in 0 until extractor.trackCount) {
@@ -202,9 +202,13 @@ class MainActivity : Activity() {
                                             break
                                         }
                                     }
-                                    extractor.release()
                                     detected
-                                } catch (_: Exception) { null }
+                                } catch (e: Exception) {
+                                    android.util.Log.w("KLOVVRecorder", "Could not inspect recording frame rate", e)
+                                    null
+                                } finally {
+                                    try { extractor.release() } catch (_: Exception) { }
+                                }
                                 "Resolution: ${w} × ${h}\nFrame rate: ${fps?.let { "$it FPS" } ?: "Not available"}\nBitrate: ${bitrate?.let { "$it kbps" } ?: "Not available"}\n${item.details}"
                             } catch (_: Exception) { item.details } finally { try { retriever.release() } catch (_: Exception) { } }
                             AlertDialog.Builder(this).setTitle("VIDEO DETAILS").setMessage(info).setPositiveButton("OK", null).show()
