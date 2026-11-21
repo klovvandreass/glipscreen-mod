@@ -22,6 +22,7 @@ import android.os.ParcelFileDescriptor
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import android.view.Surface
+import android.view.View
 import android.graphics.PixelFormat
 import android.widget.Button
 import android.widget.LinearLayout
@@ -455,7 +456,7 @@ class RecordingService : Service() {
     }
     private fun updateFloatingControls() { floatingPauseButton?.text = if (paused.get()) "RESUME" else "PAUSE" }
     private fun removeFloatingControls() {
-        try { floatingPanel?.let { windowManager?.removeView(it) } } catch (_: Exception) { }
+        try { val panel = floatingPanel; if (panel != null) windowManager?.removeView(panel) } catch (_: Exception) { }
         floatingPanel = null; floatingPauseButton = null; windowManager = null
     }
     private fun requestStop() {
