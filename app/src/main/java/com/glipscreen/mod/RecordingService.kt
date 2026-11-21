@@ -142,8 +142,11 @@ class RecordingService : Service() {
             val candidates = allCodecs.filter { info ->
                 info.isEncoder && info.supportedTypes.any { it.equals(mime, true) }
             }.sortedByDescending { if (Build.VERSION.SDK_INT >= 29 && it.isHardwareAccelerated) 1 else 0 }
-            for ((candidateWidth, candidateHeight) in sizeCandidates) {
-                for (info in candidates) {
+            // Prefer a hardware encoder first, then choose the largest size it supports.
+            // This avoids accidentally selecting a full-size software encoder before checking
+            // whether a hardware encoder can handle a slightly smaller fallback size.
+            for (info in candidates) {
+                for ((candidateWidth, candidateHeight) in sizeCandidates) {
                     try {
                         val caps = info.getCapabilitiesForType(mime).videoCapabilities
                         val w = (candidateWidth / caps.widthAlignment) * caps.widthAlignment
