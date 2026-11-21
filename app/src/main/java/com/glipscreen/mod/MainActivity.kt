@@ -395,7 +395,7 @@ class MainActivity : Activity() {
 
         val pageViews = listOf(homeScroll, videosScroll, settingsScroll, aboutScroll)
         val navButtons = ArrayList<Button>()
-        val navLabels = listOf("⌂\nHome", "⚙\nSettings", "▣\nVideos", "ⓘ\nAbout")
+        val navLabels = listOf("⌂\nHome", "▣\nVideos", "⚙\nSettings", "ⓘ\nAbout")
         fun selectPage(index: Int) {
             pageViews.forEachIndexed { i, view ->
                 view.visibility = if (i == index) View.VISIBLE else View.GONE
