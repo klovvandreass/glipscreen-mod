@@ -383,6 +383,7 @@ class RecordingService : Service() {
         val playbackSamples = ShortArray(2048)
         val micSamples = ShortArray(2048)
         var samples: Long = 0
+        var eosQueued = false
         try {
             while (!stopping.get()) {
                 // Reserve an encoder input slot before reading PCM. This avoids consuming
@@ -424,6 +425,7 @@ class RecordingService : Service() {
                 if (stopping.get()) {
                     codec.queueInputBuffer(inputIndex, 0, 0, samples * 1_000_000L / rate,
                         MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                    eosQueued = true
                     break
                 }
                 count = minOf(count, input.remaining() / 2)
@@ -457,7 +459,7 @@ class RecordingService : Service() {
             try { micRecord?.release() } catch (_: Exception) { }
             micRecord = null
             try {
-                var queued = false
+                var queued = eosQueued
                 val eosDeadlineNs = System.nanoTime() + 3_000_000_000L
                 while (!queued && !finished.get() && System.nanoTime() < eosDeadlineNs) {
                     val idx = codec.dequeueInputBuffer(10000)
