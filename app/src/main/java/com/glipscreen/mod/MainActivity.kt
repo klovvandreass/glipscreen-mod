@@ -17,6 +17,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.RadioGroup
@@ -49,7 +50,7 @@ class MainActivity : Activity() {
                 cornerRadius = dp(radius).toFloat()
                 if (stroke != null) setStroke(dp(1), stroke)
             }
-        fun makeText(value: String, size: Float, color: Int, bold: Boolean = false) =
+        fun label(value: String, size: Float, color: Int, bold: Boolean = false) =
             TextView(this).apply {
                 text = value
                 textSize = size
@@ -61,62 +62,89 @@ class MainActivity : Activity() {
         }
         fun panel(): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(15), dp(16), dp(15))
+            setPadding(dp(17), dp(16), dp(17), dp(16))
             background = surface(0xFF121F33.toInt(), 18, 0xFF20334F.toInt())
         }
-        fun sectionTitle(value: String): TextView =
-            makeText(value, 12f, 0xFF91A9C7.toInt(), true).apply {
-                letterSpacing = 0.08f
+        fun section(value: String) = label(value, 12f, 0xFF91A9C7.toInt(), true).apply {
+            letterSpacing = 0.08f
+        }
+        fun pageScroll(): Pair<android.widget.ScrollView, LinearLayout> {
+            val content = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(20), dp(22), dp(20), dp(28))
             }
-
-        val scroll = android.widget.ScrollView(this).apply {
-            isFillViewport = true
-            setBackgroundColor(0xFF0A1220.toInt())
+            val scroll = android.widget.ScrollView(this).apply {
+                isFillViewport = true
+                setBackgroundColor(0xFF0A1220.toInt())
+                addView(content)
+            }
+            return scroll to content
         }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(22), dp(20), dp(28))
-        }
-        scroll.addView(root)
-        setContentView(scroll)
 
         val prefs = getSharedPreferences("glip_settings", MODE_PRIVATE)
+        val shell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF0A1220.toInt())
+        }
+        val pages = android.widget.FrameLayout(this)
+        shell.addView(pages, LinearLayout.LayoutParams(-1, 0, 1f))
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(7), dp(8), dp(7), dp(8))
+            background = surface(0xFF101B2B.toInt(), 0)
+        }
+        shell.addView(nav, LinearLayout.LayoutParams(-1, dp(66)))
+        setContentView(shell)
 
-        // Brand header
+        // Hidden selection controls keep the existing recording engine inputs intact.
+        resolution = spinner(listOf("Auto (recommended)", "480p", "720p HD", "1080p Full HD", "1440p 2K", "2160p 4K"))
+        frameRate = spinner(listOf("Auto (recommended)", "24 FPS", "30 FPS", "60 FPS", "90 FPS", "120 FPS"))
+        codec = spinner(listOf("H.264 (most compatible)", "H.265 / HEVC (smaller file, if supported)"))
+        countdown = spinner(listOf("No countdown", "3 seconds", "5 seconds", "10 seconds"))
+        quality = spinner(listOf("Standard (smaller file)", "High quality", "Maximum quality"))
+        resolution.setSelection(prefs.getInt("resolution", 0).coerceIn(0, 5))
+        frameRate.setSelection(prefs.getInt("fps", 0).coerceIn(0, 5))
+        codec.setSelection(prefs.getInt("codec", 0).coerceIn(0, 1))
+        countdown.setSelection(prefs.getInt("countdown", 1).coerceIn(0, 3))
+        quality.setSelection(prefs.getInt("quality", 1).coerceIn(0, 2))
+        selectedMode = prefs.getInt(
+            "audio_mode",
+            if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
+        )
+
+        // HOME
+        val (homeScroll, home) = pageScroll()
+        pages.addView(homeScroll)
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val mark = makeText("K", 23f, 0xFF75B9FF.toInt(), true).apply {
+        header.addView(label("K", 23f, 0xFF75B9FF.toInt(), true).apply {
             gravity = Gravity.CENTER
             background = surface(0xFF17365C.toInt(), 13)
-            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
-        }
-        header.addView(mark)
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
         val brand = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
         }
-        brand.addView(makeText("Klovv Screen", 21f, 0xFFFFFFFF.toInt(), true))
-        brand.addView(makeText("SCREEN RECORDER", 10f, 0xFF8299B7.toInt(), true))
+        brand.addView(label("Klovv Screen", 21f, 0xFFFFFFFF.toInt(), true))
+        brand.addView(label("SCREEN RECORDER", 10f, 0xFF8299B7.toInt(), true))
         header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
-        header.addView(makeText("●  READY", 10f, 0xFF69D9A4.toInt(), true))
-        root.addView(header)
-        gap(root, 28)
+        header.addView(label("● READY", 10f, 0xFF69D9A4.toInt(), true))
+        home.addView(header)
+        gap(home, 30)
+        home.addView(label("Record your gameplay", 25f, 0xFFFFFFFF.toInt(), true))
+        gap(home, 5)
+        home.addView(label("Simple controls. Clear recordings.", 14f, 0xFF91A4BE.toInt()))
+        gap(home, 22)
 
-        root.addView(makeText("Record your gameplay", 25f, 0xFFFFFFFF.toInt(), true))
-        gap(root, 5)
-        root.addView(makeText("Simple controls. Clear recordings.", 14f, 0xFF91A4BE.toInt()))
-        gap(root, 20)
-
-        // Main recording card
         val recordCard = panel()
-        recordCard.addView(sectionTitle("RECORDING STATUS"))
-        gap(recordCard, 10)
-        status = makeText("Ready to record", 16f, 0xFF6DDEAA.toInt(), true)
+        recordCard.addView(section("RECORDING STATUS"))
+        gap(recordCard, 12)
+        status = label("Ready to record", 17f, 0xFF6DDEAA.toInt(), true)
         recordCard.addView(status)
-        gap(recordCard, 15)
-
+        gap(recordCard, 18)
         startButton = Button(this).apply {
             text = "●   START RECORDING"
             isAllCaps = false
@@ -128,7 +156,7 @@ class MainActivity : Activity() {
         }
         recordCard.addView(startButton, LinearLayout.LayoutParams(-1, dp(54)))
         gap(recordCard, 9)
-        val stop = Button(this).apply {
+        val stopButton = Button(this).apply {
             text = "STOP  /  CANCEL"
             isAllCaps = false
             textSize = 13f
@@ -152,107 +180,136 @@ class MainActivity : Activity() {
                 }
             }
         }
-        recordCard.addView(stop, LinearLayout.LayoutParams(-1, dp(46)))
-        root.addView(recordCard)
-        gap(root, 18)
+        recordCard.addView(stopButton, LinearLayout.LayoutParams(-1, dp(46)))
+        home.addView(recordCard)
+        gap(home, 16)
 
-        // Settings card
-        val settingsCard = panel()
-        settingsCard.addView(sectionTitle("RECORDING SETUP"))
-        gap(settingsCard, 12)
-
-        fun addSetting(label: String, control: View) {
-            settingsCard.addView(makeText(label, 13f, 0xFFE3ECF8.toInt(), true))
-            gap(settingsCard, 5)
-            settingsCard.addView(control, LinearLayout.LayoutParams(-1, dp(48)))
-            gap(settingsCard, 13)
-        }
-
-        resolution = spinner(listOf("Auto (recommended)", "480p", "720p HD", "1080p Full HD", "1440p 2K", "2160p 4K"))
-        frameRate = spinner(listOf("Auto (recommended)", "24 FPS", "30 FPS", "60 FPS", "90 FPS", "120 FPS"))
-        codec = spinner(listOf("H.264 (most compatible)", "H.265 / HEVC (smaller file, if supported)"))
-        countdown = spinner(listOf("No countdown", "3 seconds", "5 seconds", "10 seconds"))
-        quality = spinner(listOf("Standard (smaller file)", "High quality", "Maximum quality"))
-
-        resolution.setSelection(prefs.getInt("resolution", 0).coerceIn(0, 5))
-        frameRate.setSelection(prefs.getInt("fps", 0).coerceIn(0, 5))
-        codec.setSelection(prefs.getInt("codec", 0).coerceIn(0, 1))
-        countdown.setSelection(prefs.getInt("countdown", 1).coerceIn(0, 3))
-        quality.setSelection(prefs.getInt("quality", 1).coerceIn(0, 2))
-
-        addSetting("VIDEO QUALITY", resolution)
-        addSetting("FRAME RATE", frameRate)
-        addSetting("VIDEO CODEC", codec)
-        addSetting("COUNTDOWN", countdown)
-        addSetting("VIDEO BITRATE PRESET", quality)
-        root.addView(settingsCard)
-        gap(root, 18)
-
-        // Audio card
-        val audioCard = panel()
-        audioCard.addView(sectionTitle("AUDIO SOURCE"))
-        gap(audioCard, 8)
-        val choices = RadioGroup(this).apply {
-            orientation = RadioGroup.VERTICAL
-            setPadding(0, dp(2), 0, 0)
-        }
-        choices.addView(RadioButton(this).apply {
-            id = 100
-            text = "Internal audio"
-            textSize = 14f
-            setTextColor(0xFFE3ECF8.toInt())
-            isChecked = Build.VERSION.SDK_INT >= 29
-            isEnabled = Build.VERSION.SDK_INT >= 29
-        })
-        choices.addView(RadioButton(this).apply {
-            id = 101
-            text = "Microphone"
-            textSize = 14f
-            setTextColor(0xFFE3ECF8.toInt())
-            isChecked = Build.VERSION.SDK_INT < 29
-        })
-        choices.addView(RadioButton(this).apply {
-            id = 102
-            text = "Internal + microphone"
-            textSize = 14f
-            setTextColor(0xFFE3ECF8.toInt())
-            isEnabled = Build.VERSION.SDK_INT >= 29
-        })
-        choices.setOnCheckedChangeListener { _, checked ->
-            selectedMode = when (checked) {
-                101 -> RecordingService.MODE_MIC
-                102 -> RecordingService.MODE_BOTH
-                else -> RecordingService.MODE_INTERNAL
-            }
-        }
-        selectedMode = prefs.getInt(
-            "audio_mode",
-            if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
-        )
-        choices.check(when (selectedMode) {
-            RecordingService.MODE_MIC -> 101
-            RecordingService.MODE_BOTH -> 102
-            else -> 100
-        })
-        audioCard.addView(choices)
-        root.addView(audioCard)
-        gap(root, 18)
-
-        val gallery = Button(this).apply {
+        val quickCard = panel()
+        quickCard.addView(section("QUICK ACCESS"))
+        gap(quickCard, 8)
+        quickCard.addView(label("Your recordings are kept together in one place.", 14f, 0xFFDCE7F5.toInt()))
+        gap(quickCard, 12)
+        val openVideos = Button(this).apply {
             text = "▣   MY RECORDINGS"
             isAllCaps = false
-            textSize = 14f
             setTextColor(0xFFDCE9F8.toInt())
-            background = surface(0xFF172941.toInt(), 14, 0xFF2C4563.toInt())
-            minHeight = dp(52)
+            background = surface(0xFF1A2D46.toInt(), 12, 0xFF304660.toInt())
+            setOnClickListener { showPage(2) }
+        }
+        quickCard.addView(openVideos, LinearLayout.LayoutParams(-1, dp(48)))
+        home.addView(quickCard)
+        gap(home, 18)
+        home.addView(label("Made for simple, everyday screen recording.", 12f, 0xFF7188A6.toInt()))
+
+        // SETTINGS
+        val (settingsScroll, settings) = pageScroll()
+        pages.addView(settingsScroll)
+        settings.addView(label("Settings", 27f, 0xFFFFFFFF.toInt(), true))
+        gap(settings, 5)
+        settings.addView(label("Keep your recording setup organized.", 14f, 0xFF91A4BE.toInt()))
+        gap(settings, 22)
+        val recordingCard = panel()
+        recordingCard.addView(section("RECORDING"))
+        gap(recordingCard, 10)
+        recordingCard.addView(label("Video and capture preferences", 16f, 0xFFFFFFFF.toInt(), true))
+        gap(recordingCard, 5)
+        recordingCard.addView(label("Resolution, frame rate, codec and quality controls will be arranged here in the next design pass.", 13f, 0xFF9FB2CB.toInt()))
+        settings.addView(recordingCard)
+        gap(settings, 14)
+        val audioCard = panel()
+        audioCard.addView(section("AUDIO"))
+        gap(audioCard, 10)
+        audioCard.addView(label("Audio source preferences", 16f, 0xFFFFFFFF.toInt(), true))
+        gap(audioCard, 5)
+        audioCard.addView(label("Internal audio and microphone options will be refined here.", 13f, 0xFF9FB2CB.toInt()))
+        settings.addView(audioCard)
+        gap(settings, 14)
+        val generalCard = panel()
+        generalCard.addView(section("GENERAL"))
+        gap(generalCard, 10)
+        generalCard.addView(label("Klovv Screen", 16f, 0xFFFFFFFF.toInt(), true))
+        gap(generalCard, 5)
+        generalCard.addView(label("A clean and straightforward screen recorder.", 13f, 0xFF9FB2CB.toInt()))
+        settings.addView(generalCard)
+
+        // RECORDINGS
+        val (videosScroll, videos) = pageScroll()
+        pages.addView(videosScroll)
+        videos.addView(label("My recordings", 27f, 0xFFFFFFFF.toInt(), true))
+        gap(videos, 5)
+        videos.addView(label("Find and manage your saved videos.", 14f, 0xFF91A4BE.toInt()))
+        gap(videos, 22)
+        val videosCard = panel()
+        videosCard.addView(section("VIDEO LIBRARY"))
+        gap(videosCard, 10)
+        val count = loadRecordings().size
+        videosCard.addView(label(if (count == 1) "1 saved recording" else "$count saved recordings", 19f, 0xFFFFFFFF.toInt(), true))
+        gap(videosCard, 5)
+        videosCard.addView(label("Saved in Movies/Klovv Screen", 13f, 0xFF9FB2CB.toInt()))
+        gap(videosCard, 15)
+        val browse = Button(this).apply {
+            text = "BROWSE RECORDINGS"
+            isAllCaps = false
+            setTextColor(0xFFFFFFFF.toInt())
+            background = surface(0xFF2678D8.toInt(), 12)
             setOnClickListener { showRecordings() }
         }
-        root.addView(gallery, LinearLayout.LayoutParams(-1, dp(52)))
-        gap(root, 13)
-        root.addView(makeText(
-            "Klovv Screen adapts recording settings to the capabilities of your Android device.",
-            12f, 0xFF7188A6.toInt()
-        ))
+        videosCard.addView(browse, LinearLayout.LayoutParams(-1, dp(50)))
+        videos.addView(videosCard)
+
+        // ABOUT
+        val (aboutScroll, about) = pageScroll()
+        pages.addView(aboutScroll)
+        about.addView(label("About", 27f, 0xFFFFFFFF.toInt(), true))
+        gap(about, 5)
+        about.addView(label("A little about your recorder.", 14f, 0xFF91A4BE.toInt()))
+        gap(about, 22)
+        val aboutCard = panel()
+        aboutCard.gravity = Gravity.CENTER_HORIZONTAL
+        aboutCard.addView(label("K", 34f, 0xFF75B9FF.toInt(), true).apply {
+            gravity = Gravity.CENTER
+            background = surface(0xFF17365C.toInt(), 18)
+            layoutParams = LinearLayout.LayoutParams(dp(76), dp(76))
+        })
+        gap(aboutCard, 14)
+        aboutCard.addView(label("Klovv Screen", 21f, 0xFFFFFFFF.toInt(), true))
+        gap(aboutCard, 5)
+        aboutCard.addView(label("SCREEN RECORDER", 11f, 0xFF8299B7.toInt(), true))
+        gap(aboutCard, 16)
+        aboutCard.addView(label("Simple screen recording, made with care.", 13f, 0xFF9FB2CB.toInt()))
+        about.addView(aboutCard)
+
+        val pageViews = listOf(homeScroll, settingsScroll, videosScroll, aboutScroll)
+        val navButtons = ArrayList<Button>()
+        val navLabels = listOf("⌂\nHome", "⚙\nSettings", "▣\nVideos", "ⓘ\nAbout")
+        fun selectPage(index: Int) {
+            pageViews.forEachIndexed { i, view ->
+                view.visibility = if (i == index) View.VISIBLE else View.GONE
+            }
+            navButtons.forEachIndexed { i, button ->
+                val selected = i == index
+                button.setTextColor(if (selected) 0xFF78BBFF.toInt() else 0xFF8397B3.toInt())
+                button.background = if (selected) surface(0xFF1A3454.toInt(), 12) else surface(0x00101B2B, 12)
+            }
+        }
+        navLabels.forEachIndexed { index, title ->
+            val button = Button(this).apply {
+                text = title
+                isAllCaps = false
+                textSize = 11f
+                minHeight = dp(50)
+                setPadding(dp(3), 0, dp(3), 0)
+                setOnClickListener { selectPage(index) }
+            }
+            navButtons.add(button)
+            nav.addView(button, LinearLayout.LayoutParams(0, dp(50), 1f))
+        }
+        selectPage(0)
+    }
+
+    private fun showPage(index: Int) {
+        // Navigation is driven by the bottom bar on the active screen.
+        // This method is kept as a no-op fallback for older click paths.
     }
 
     override fun onResume() {
