@@ -44,6 +44,8 @@ class RecordingService : Service() {
     private val finished = AtomicBoolean(false)
     private val videoEosSignaled = AtomicBoolean(false)
     private var drainsStarted = false
+    // Surface video timestamps use the device monotonic clock; normalize them to the audio timeline.
+    private var recordingStartUs = 0L
     private data class PendingSample(val isVideo: Boolean, val bytes: ByteArray, val pts: Long, val flags: Int)
     private val pendingSamples = ArrayList<PendingSample>()
     private var audioMode = MODE_INTERNAL
@@ -141,6 +143,7 @@ class RecordingService : Service() {
         projection!!.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() { requestStop() }
         }, null)
+        recordingStartUs = System.nanoTime() / 1_000L
         virtualDisplay = projection!!.createVirtualDisplay("GLIPScreenCapture", alignedWidth, alignedHeight,
             metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, surface, null, null)
         thread(name = "GLIP-Video-Drain") { drainVideo() }
@@ -191,7 +194,8 @@ class RecordingService : Service() {
             if (!muxerStarted && videoTrack >= 0 && audioTrack >= 0) {
                 muxer!!.start()
                 muxerStarted = true
-                for (sample in pendingSamples) {
+                // Interleave the buffered startup samples by presentation timestamp before writing.
+                for (sample in pendingSamples.sortedBy { it.pts }) {
                     val track = if (sample.isVideo) videoTrack else audioTrack
                     val data = java.nio.ByteBuffer.wrap(sample.bytes)
                     val info = MediaCodec.BufferInfo().apply { set(0, sample.bytes.size, sample.pts, sample.flags) }
@@ -211,14 +215,18 @@ class RecordingService : Service() {
             duplicate.position(info.offset)
             duplicate.limit(info.offset + info.size)
             duplicate.get(copy)
+            // Video Surface timestamps are absolute monotonic time; AAC timestamps start at zero.
+            // Put both tracks on one recording-relative timeline so MP4 duration is valid.
+            val normalizedPts = if (isVideo) (info.presentationTimeUs - recordingStartUs).coerceAtLeast(0L)
+                else info.presentationTimeUs
             if (!muxerStarted) {
-                pendingSamples.add(PendingSample(isVideo, copy, info.presentationTimeUs, info.flags))
+                pendingSamples.add(PendingSample(isVideo, copy, normalizedPts, info.flags))
                 return
             }
             val track = if (isVideo) videoTrack else audioTrack
             if (track >= 0) {
                 val data = java.nio.ByteBuffer.wrap(copy)
-                val sampleInfo = MediaCodec.BufferInfo().apply { set(0, copy.size, info.presentationTimeUs, info.flags) }
+                val sampleInfo = MediaCodec.BufferInfo().apply { set(0, copy.size, normalizedPts, info.flags) }
                 muxer!!.writeSampleData(track, data, sampleInfo)
             }
         }
