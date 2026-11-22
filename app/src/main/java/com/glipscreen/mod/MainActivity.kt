@@ -118,78 +118,51 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
         )
 
-        // HOME — premium dashboard, with recording controls and tappable presets.
+        // HOME — simplified premium layout: clear hierarchy, fewer distractions.
         var navigateTo: (Int) -> Unit = {}
         val (homeScroll, home) = pageScroll()
         pages.addView(homeScroll)
-        homeScroll.setPadding(0, dp(8), 0, 0)
-        homeScroll.clipToPadding = false
 
-        home.addView(label("KLOVV SCREEN", 25f, 0xFFFFFFFF.toInt(), true))
-        gap(home, 6)
-        home.addView(label("SCREEN RECORDER  •  SIMPLE. CLEAN. READY.", 10f, 0xFF789CCB.toInt(), true))
-        gap(home, 7)
-        home.addView(label("Capture your screen with clarity and control.", 13f, 0xFF9AABC1.toInt()))
+        home.addView(label("Klovv Screen", 27f, 0xFFF2F5FA.toInt(), true))
+        gap(home, 5)
+        home.addView(label("Screen recording made simple", 14f, 0xFF91A2B8.toInt()))
         gap(home, 22)
 
-        val hero = panel().apply {
-            setPadding(dp(18), dp(20), dp(18), dp(20))
-            background = surface(0xFF0A1426.toInt(), 24, 0xFF1D3D66.toInt())
+        val recorderCard = panel().apply {
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = surface(0xFF0B1727.toInt(), 20, 0xFF1B3556.toInt())
         }
-        hero.addView(section("READY WHEN YOU ARE"))
-        gap(hero, 14)
-        val visual = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(-1, dp(154))
-        }
-        val halo = View(this).apply {
-            background = android.graphics.drawable.GradientDrawable().apply {
-                shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(0xFF203F65.toInt())
-                setStroke(dp(1), 0xFF315B8E.toInt())
-            }
-            layoutParams = FrameLayout.LayoutParams(dp(132), dp(132), Gravity.CENTER)
-        }
-        visual.addView(halo)
-        val inner = TextView(this).apply {
-            text = "▣"
-            textSize = 47f
-            gravity = Gravity.CENTER
-            setTextColor(0xFFFFFFFF.toInt())
-            background = surface(0xFF1D5FB8.toInt(), 28)
-            elevation = dp(8).toFloat()
-            layoutParams = FrameLayout.LayoutParams(dp(88), dp(88), Gravity.CENTER)
-        }
-        visual.addView(inner)
-        hero.addView(visual)
-        gap(hero, 8)
-        hero.addView(label("Capture every moment", 21f, 0xFFFFFFFF.toInt(), true).apply { gravity = Gravity.CENTER })
-        gap(hero, 5)
-        hero.addView(label("Record gameplay, tutorials, and anything on your screen.", 13f, 0xFFB8C2D2.toInt()).apply {
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-        })
-        gap(hero, 17)
-        status = label("●  Ready to record", 13f, 0xFF70DDB0.toInt(), true).apply { gravity = Gravity.CENTER }
-        hero.addView(status)
-        gap(hero, 12)
+        recorderCard.addView(section("SCREEN RECORDER"))
+        gap(recorderCard, 12)
+        recorderCard.addView(label("Ready to capture", 22f, 0xFFF2F5FA.toInt(), true))
+        gap(recorderCard, 5)
+        recorderCard.addView(label("Record gameplay, tutorials, or anything on your screen.", 14f, 0xFF9AABC1.toInt()))
+        gap(recorderCard, 18)
+
+        status = label("●  Ready to record", 14f, 0xFF70DDB0.toInt(), true)
+        recorderCard.addView(status)
+        gap(recorderCard, 14)
+
         startButton = Button(this).apply {
-            text = "START RECORDING"
+            text = "Start recording"
             isAllCaps = false
-            textSize = 15f
+            textSize = 16f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             setTextColor(0xFFFFFFFF.toInt())
-            background = surface(0xFF1D5FB8.toInt(), 16)
+            background = surface(0xFF245A96.toInt(), 14)
             minHeight = dp(54)
             setOnClickListener { requestRecording() }
         }
-        hero.addView(startButton, LinearLayout.LayoutParams(-1, dp(54)))
-        gap(hero, 8)
+        recorderCard.addView(startButton, LinearLayout.LayoutParams(-1, dp(54)))
+        gap(recorderCard, 8)
+
         val stopButton = Button(this).apply {
-            text = "STOP  /  CANCEL"
+            text = "Stop / cancel"
             isAllCaps = false
-            textSize = 12f
-            setTextColor(0xFFB9C9DD.toInt())
-            background = surface(0xFF111C2D.toInt(), 12, 0xFF263B5B.toInt())
-            minHeight = dp(42)
+            textSize = 14f
+            setTextColor(0xFFC2D0E2.toInt())
+            background = surface(0xFF111F30.toInt(), 12, 0xFF263B55.toInt())
+            minHeight = dp(46)
             setOnClickListener {
                 val timer = countdownTimer
                 if (timer != null) {
@@ -207,58 +180,15 @@ class MainActivity : Activity() {
                 }
             }
         }
-        hero.addView(stopButton, LinearLayout.LayoutParams(-1, dp(42)))
-        home.addView(hero)
-        gap(home, 20)
+        recorderCard.addView(stopButton, LinearLayout.LayoutParams(-1, dp(46)))
+        home.addView(recorderCard)
+        gap(home, 22)
 
-        home.addView(label("Game Launcher", 18f, 0xFFFFFFFF.toInt(), true))
-        gap(home, 4)
-        home.addView(label("Your favorite games, all in one place.", 13f, 0xFF8795AA.toInt()))
-        gap(home, 12)
-        val gameLauncherCard = panel().apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(15), dp(16), dp(15))
-        }
-        val gameIcon = TextView(this).apply {
-            text = "🎮"
-            textSize = 27f
-            gravity = Gravity.CENTER
-            background = surface(0xFF132B4B.toInt(), 15)
-            layoutParams = LinearLayout.LayoutParams(dp(58), dp(58))
-        }
-        gameLauncherCard.addView(gameIcon)
-        val gameLauncherText = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(13), 0, 0, 0)
-            addView(label("Game shortcuts", 15f, 0xFFFFFFFF.toInt(), true))
-            gap(this, 4)
-            addView(label("Your game icons will appear here.", 12f, 0xFF9AA8BC.toInt()))
-        }
-        gameLauncherCard.addView(gameLauncherText, LinearLayout.LayoutParams(0, -2, 1f))
-        gameLauncherCard.addView(label("›", 27f, 0xFF6D9EDB.toInt(), true))
-        home.addView(gameLauncherCard)
-        gap(home, 20)
-
-        home.addView(label("Quick settings", 18f, 0xFFFFFFFF.toInt(), true))
-        gap(home, 4)
-        home.addView(label("Tap any option to customize your recording.", 13f, 0xFF8795AA.toInt()))
+        home.addView(label("Quick settings", 19f, 0xFFF2F5FA.toInt(), true))
+        gap(home, 5)
+        home.addView(label("Your preferred recording setup.", 13f, 0xFF91A2B8.toInt()))
         gap(home, 12)
 
-        fun settingTile(title: String, value: String, icon: String, onTap: () -> Unit): LinearLayout {
-            return LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = surface(0xFF0B1422.toInt(), 16, 0xFF263D59.toInt())
-                isClickable = true
-                isFocusable = true
-                addView(label(icon, 18f, 0xFF6D9EDB.toInt(), true))
-                gap(this, 9)
-                addView(label(title, 12f, 0xFF8B9AB2.toInt(), true))
-                addView(label(value, 15f, 0xFFFFFFFF.toInt(), true).apply { tag = "setting_value" })
-                setOnClickListener { onTap() }
-            }
-        }
         fun chooseSetting(title: String, items: List<String>, spinnerRef: Spinner, prefKey: String, tile: LinearLayout) {
             AlertDialog.Builder(this)
                 .setTitle(title)
@@ -268,62 +198,74 @@ class MainActivity : Activity() {
                     tile.findViewWithTag<TextView>("setting_value")?.text = items[which]
                     dialog.dismiss()
                 }
-                .setNegativeButton("CANCEL", null)
+                .setNegativeButton("Cancel", null)
                 .show()
         }
+
         val qualityItems = listOf("Standard", "High quality", "Maximum quality")
         val fpsItems = listOf("Auto", "24 FPS", "30 FPS", "60 FPS", "90 FPS", "120 FPS")
         val codecItems = listOf("H.264", "H.265 / HEVC")
         val resolutionItems = listOf("Auto", "480p", "720p HD", "1080p Full HD", "1440p 2K", "2160p 4K")
-        val grid1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        lateinit var qualityTile: LinearLayout
-        lateinit var fpsTile: LinearLayout
-        lateinit var codecTile: LinearLayout
-        lateinit var resolutionTile: LinearLayout
-        qualityTile = settingTile("QUALITY", qualityItems[quality.selectedItemPosition], "◈") {
-            chooseSetting("Recording quality", qualityItems, quality, "quality", qualityTile)
+        fun homePreference(title: String, value: String, onTap: (LinearLayout) -> Unit): LinearLayout {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+                background = surface(0xFF0B1727.toInt(), 13, 0xFF1B2D45.toInt())
+                isClickable = true
+                isFocusable = true
+            }
+            row.addView(label(title, 14f, 0xFFDCE5F1.toInt(), true),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(label(value, 14f, 0xFF91B8E8.toInt(), true).apply {
+                tag = "setting_value"
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            })
+            row.addView(label("  ›", 20f, 0xFF789CCB.toInt(), true))
+            row.setOnClickListener { onTap(row) }
+            return row
         }
-        fpsTile = settingTile("FRAME RATE", fpsItems[frameRate.selectedItemPosition], "◷") {
-            chooseSetting("Frame rate", fpsItems, frameRate, "fps", fpsTile)
+        fun addHomeSetting(row: LinearLayout) {
+            home.addView(row, LinearLayout.LayoutParams(-1, dp(54)))
+            gap(home, 8)
         }
-        grid1.addView(qualityTile, LinearLayout.LayoutParams(0, dp(104), 1f).apply { marginEnd = dp(7) })
-        grid1.addView(fpsTile, LinearLayout.LayoutParams(0, dp(104), 1f).apply { marginStart = dp(7) })
-        home.addView(grid1)
-        gap(home, 10)
-        val grid2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        codecTile = settingTile("VIDEO CODEC", codecItems[codec.selectedItemPosition], "▤") {
-            chooseSetting("Video codec", codecItems, codec, "codec", codecTile)
-        }
-        resolutionTile = settingTile("RESOLUTION", resolutionItems[resolution.selectedItemPosition], "▣") {
-            chooseSetting("Resolution", resolutionItems, resolution, "resolution", resolutionTile)
-        }
-        grid2.addView(codecTile, LinearLayout.LayoutParams(0, dp(104), 1f).apply { marginEnd = dp(7) })
-        grid2.addView(resolutionTile, LinearLayout.LayoutParams(0, dp(104), 1f).apply { marginStart = dp(7) })
-        home.addView(grid2)
-        gap(home, 18)
 
-        val quickCard = panel()
-        quickCard.orientation = LinearLayout.HORIZONTAL
-        quickCard.gravity = Gravity.CENTER_VERTICAL
-        quickCard.addView(label("▣", 23f, 0xFF6D9EDB.toInt(), true))
-        val quickText = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), 0, 0, 0)
-            addView(label("My recordings", 15f, 0xFFFFFFFF.toInt(), true))
-            addView(label("Browse and manage saved videos", 12f, 0xFF8795AA.toInt()))
+        addHomeSetting(homePreference("Resolution", resolution.selectedItem.toString()) { row ->
+            chooseSetting("Resolution", resolutionItems, resolution, "resolution", row)
+        })
+        addHomeSetting(homePreference("Frame rate", fpsItems[frameRate.selectedItemPosition]) { row ->
+            chooseSetting("Frame rate", fpsItems, frameRate, "fps", row)
+        })
+        addHomeSetting(homePreference("Video quality", qualityItems[quality.selectedItemPosition]) { row ->
+            chooseSetting("Video quality", qualityItems, quality, "quality", row)
+        })
+        addHomeSetting(homePreference("Video codec", codecItems[codec.selectedItemPosition]) { row ->
+            chooseSetting("Video codec", codecItems, codec, "codec", row)
+        })
+        gap(home, 12)
+
+        val recordingsCard = panel().apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        quickCard.addView(quickText, LinearLayout.LayoutParams(0, -2, 1f))
-        quickCard.addView(Button(this).apply {
-            text = "OPEN"
+        val recordingsText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(label("My recordings", 16f, 0xFFF2F5FA.toInt(), true))
+            gap(this, 4)
+            addView(label("View and manage saved videos", 13f, 0xFF91A2B8.toInt()))
+        }
+        recordingsCard.addView(recordingsText, LinearLayout.LayoutParams(0, -2, 1f))
+        recordingsCard.addView(Button(this).apply {
+            text = "Open"
             isAllCaps = false
-            textSize = 11f
-            setTextColor(0xFF8AADE0.toInt())
-            background = surface(0xFF142744.toInt(), 10)
+            textSize = 13f
+            setTextColor(0xFFBBD5F5.toInt())
+            background = surface(0xFF17365A.toInt(), 10)
             setOnClickListener { navigateTo(1) }
         })
-        home.addView(quickCard)
+        home.addView(recordingsCard)
         gap(home, 14)
-        home.addView(label("Designed for smooth, simple screen recording.", 11f, 0xFF6D7D94.toInt()))
+        home.addView(label("Simple controls. Clear recordings.", 12f, 0xFF71839B.toInt()))
 
         // SETTINGS
         val (settingsScroll, settings) = pageScroll()
