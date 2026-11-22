@@ -183,10 +183,12 @@ class RecordingService : Service() {
         val alignedHeight = selectedEncoder.height
         val fps = selectedEncoder.fps
         val mime = if (codecInfo.supportedTypes.any { it.equals(wantedMime, true) }) wantedMime else MediaFormat.MIMETYPE_VIDEO_AVC
-        val pixelRatio = (alignedWidth.toLong() * alignedHeight.toLong()).toDouble() / (1920.0 * 1080.0)
-        val qualityMultiplier = when (intentQuality) { 0 -> 0.70; 2 -> 1.40; else -> 1.0 }
-        val bitrate = (10_000_000.0 * pixelRatio * fps / 60.0 * qualityMultiplier)
-            .toLong().coerceIn(1_000_000L, 40_000_000L).toInt()
+        // Quick Settings labels are target video bitrates, not cosmetic quality names.
+        val bitrate = when (intentQuality) {
+            0 -> 7_000_000
+            2 -> 14_000_000
+            else -> 10_000_000
+        }
         android.util.Log.i("KLOVVRecorder", "Video config: codec=${codecInfo.name}, mime=$mime, hardware=${Build.VERSION.SDK_INT >= 29 && codecInfo.isHardwareAccelerated}, size=${alignedWidth}x${alignedHeight}, fps=$fps, bitrate=${bitrate / 1000}kbps, quality=$intentQuality")
         val encoderCaps = codecInfo.getCapabilitiesForType(mime).encoderCapabilities
         fun createVideoFormat(useOptionalHints: Boolean): MediaFormat =
