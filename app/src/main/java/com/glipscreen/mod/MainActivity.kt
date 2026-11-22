@@ -26,6 +26,14 @@ import android.widget.Spinner
 import android.widget.TextView
 
 class MainActivity : Activity() {
+    private fun tr(value: String): String = KlovvLanguage.translate(this, value)
+
+    private fun translateViewTree(view: View) {
+        if (view is TextView) view.text = tr(view.text.toString())
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) translateViewTree(view.getChildAt(i))
+        }
+    }
     private val captureRequest = 4101
     private val audioPermissionRequest = 4102
     private val notificationPermissionRequest = 4103
@@ -170,13 +178,13 @@ class MainActivity : Activity() {
                     countdownTimer = null
                     captureFlowActive = false
                     startButton.isEnabled = true
-                    status.text = "Countdown cancelled"
+                    status.text = tr("Countdown cancelled")
                 } else {
                     val i = Intent(this@MainActivity, RecordingService::class.java).apply {
                         action = RecordingService.ACTION_STOP
                     }
                     startService(i)
-                    status.text = "Stopping recording…"
+                    status.text = tr("Stopping recording…")
                 }
             }
         }
@@ -191,14 +199,14 @@ class MainActivity : Activity() {
 
         fun chooseSetting(title: String, items: List<String>, spinnerRef: Spinner, prefKey: String, tile: LinearLayout) {
             AlertDialog.Builder(this)
-                .setTitle(title)
-                .setSingleChoiceItems(items.toTypedArray(), spinnerRef.selectedItemPosition) { dialog, which ->
+                 .setTitle(tr(title))
+                .setSingleChoiceItems(items.map { tr(it) }.toTypedArray(), spinnerRef.selectedItemPosition) { dialog, which ->
                     spinnerRef.setSelection(which)
                     prefs.edit().putInt(prefKey, which).apply()
-                    tile.findViewWithTag<TextView>("setting_value")?.text = items[which]
+                    tile.findViewWithTag<TextView>("setting_value")?.text = tr(items[which])
                     dialog.dismiss()
                 }
-                .setNegativeButton("Cancel", null)
+                 .setNegativeButton(tr("Cancel"), null)
                 .show()
         }
 
@@ -357,6 +365,35 @@ class MainActivity : Activity() {
         generalCard.addView(label("Klovv Screen", 16f, 0xFFFFFFFF.toInt(), true))
         gap(generalCard, 5)
         generalCard.addView(label("A clean and straightforward screen recorder.", 13f, 0xFF9AA8BC.toInt()))
+        gap(generalCard, 16)
+        val languageRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(13), dp(12), dp(13))
+            background = surface(0xFF101B2B.toInt(), 12)
+            isClickable = true
+            isFocusable = true
+        }
+        languageRow.addView(label("Language", 14f, 0xFFDCE7F5.toInt(), true),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        val languageValue = label(
+            if (prefs.getString("language", "id") == "en") "English" else "Bahasa Indonesia",
+            13f, 0xFF83A9D8.toInt(), true
+        )
+        languageRow.addView(languageValue)
+        languageRow.setOnClickListener {
+            val current = if (prefs.getString("language", "id") == "en") 1 else 0
+            AlertDialog.Builder(this)
+                .setTitle(tr("Language"))
+                .setSingleChoiceItems(arrayOf("Bahasa Indonesia", "English"), current) { dialog, which ->
+                    prefs.edit().putString("language", if (which == 1) "en" else "id").apply()
+                    dialog.dismiss()
+                    recreate()
+                }
+                .setNegativeButton(tr("Cancel"), null)
+                .show()
+        }
+        generalCard.addView(languageRow)
         settings.addView(generalCard)
 
         // RECORDINGS
@@ -435,6 +472,7 @@ class MainActivity : Activity() {
             nav.addView(button, LinearLayout.LayoutParams(0, dp(50), 1f))
         }
         navigateTo = { index -> selectPage(index) }
+        translateViewTree(shell)
         selectPage(0)
     }
 
@@ -488,26 +526,26 @@ class MainActivity : Activity() {
     private fun showRecordings() {
         val items = loadRecordings()
         if (items.isEmpty()) {
-            AlertDialog.Builder(this).setTitle("My recordings")
-                .setMessage("Belum ada video Klovv Screen. Hasil rekaman tersimpan di Movies/Klovv Screen.")
-                .setPositiveButton("OK", null).show()
+            AlertDialog.Builder(this).setTitle(tr("My recordings"))
+                .setMessage(tr("Belum ada video Klovv Screen. Hasil rekaman tersimpan di Movies/Klovv Screen."))
+                .setPositiveButton(tr("OK"), null).show()
             return
         }
         val list = ListView(this)
         list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_2, android.R.id.text1,
             items.map { it.title + "\n" + it.details })
-        val dialog = AlertDialog.Builder(this).setTitle("MY RECORDINGS • ${items.size}")
-            .setView(list).setNegativeButton("CLOSE", null).create()
+        val dialog = AlertDialog.Builder(this).setTitle(tr("MY RECORDINGS") + " • ${items.size}")
+            .setView(list).setNegativeButton(tr("CLOSE"), null).create()
         list.setOnItemClickListener { _, _, position, _ ->
             val item = items[position]
             AlertDialog.Builder(this).setTitle(item.title)
-                .setItems(arrayOf("Play video", "Share video", "Video details", "Rename video", "Delete video")) { _, choice ->
+                 .setItems(arrayOf("Play video", "Share video", "Video details", "Rename video", "Delete video").map { tr(it) }.toTypedArray()) { _, choice ->
                     when (choice) {
                         0 -> {
                             val play = Intent(Intent.ACTION_VIEW).setDataAndType(item.uri, "video/mp4")
                                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             try { startActivity(play) } catch (_: Exception) {
-                                status.text = "No video player found"
+                                status.text = tr("No video player found")
                             }
                         }
                         1 -> {
@@ -515,7 +553,7 @@ class MainActivity : Activity() {
                                 type = "video/mp4"; putExtra(Intent.EXTRA_STREAM, item.uri)
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
-                            startActivity(Intent.createChooser(share, "Share recording"))
+                            startActivity(Intent.createChooser(share, tr("Share recording")))
                         }
                         2 -> {
                             val retriever = android.media.MediaMetadataRetriever()
@@ -545,50 +583,50 @@ class MainActivity : Activity() {
                                 }
                                 "Resolution: ${w} × ${h}\nFrame rate: ${fps?.let { "$it FPS" } ?: "Not available"}\nBitrate: ${bitrate?.let { "$it kbps" } ?: "Not available"}\n${item.details}"
                             } catch (_: Exception) { item.details } finally { try { retriever.release() } catch (_: Exception) { } }
-                            AlertDialog.Builder(this).setTitle("VIDEO DETAILS").setMessage(info).setPositiveButton("OK", null).show()
+                            AlertDialog.Builder(this).setTitle(tr("VIDEO DETAILS")).setMessage(tr(info)).setPositiveButton(tr("OK"), null).show()
                         }
                         3 -> {
                             val input = EditText(this).apply {
                                 setText(item.title.substringBeforeLast("."))
-                                hint = "Video name"
+                                hint = tr("Video name")
                             }
-                            AlertDialog.Builder(this).setTitle("Rename recording").setView(input)
-                                .setNegativeButton("CANCEL", null)
-                                .setPositiveButton("SAVE") { _, _ ->
+                            AlertDialog.Builder(this).setTitle(tr("Rename recording")).setView(input)
+                                .setNegativeButton(tr("CANCEL"), null)
+                                .setPositiveButton(tr("SAVE")) { _, _ ->
                                     val newName = input.text.toString().trim().replace(Regex("[^A-Za-z0-9 _-]"), "")
                                     if (newName.isNotBlank()) {
                                         try {
                                             val values = android.content.ContentValues().apply { put(MediaStore.Video.Media.DISPLAY_NAME, "$newName.mp4") }
                                             val updated = contentResolver.update(item.uri, values, null, null)
                                             if (updated > 0) {
-                                                status.text = "Recording renamed"
+                                                status.text = tr("Recording renamed")
                                                 dialog.dismiss()
                                                 showRecordings()
                                             } else {
-                                                status.text = "Recording was not renamed"
+                                                status.text = tr("Recording was not renamed")
                                             }
                                         } catch (e: Exception) {
                                             android.util.Log.e("KLOVVRecorder", "Rename failed", e)
-                                            status.text = "Could not rename recording"
+                                            status.text = tr("Could not rename recording")
                                         }
                                     }
                                 }.show()
                         }
-                        4 -> AlertDialog.Builder(this).setMessage("Delete this recording?")
-                            .setNegativeButton("CANCEL", null)
-                            .setPositiveButton("DELETE") { _, _ ->
+                        4 -> AlertDialog.Builder(this).setMessage(tr("Delete this recording?"))
+                            .setNegativeButton(tr("CANCEL"), null)
+                            .setPositiveButton(tr("DELETE")) { _, _ ->
                                 try {
                                     val deleted = contentResolver.delete(item.uri, null, null)
                                     if (deleted > 0) {
-                                        status.text = "Recording deleted"
+                                        status.text = tr("Recording deleted")
                                         dialog.dismiss()
                                         showRecordings()
                                     } else {
-                                        status.text = "Recording was not deleted"
+                                        status.text = tr("Recording was not deleted")
                                     }
                                 } catch (e: Exception) {
                                     android.util.Log.e("KLOVVRecorder", "Delete failed", e)
-                                    status.text = "Could not delete recording"
+                                    status.text = tr("Could not delete recording")
                                 }
                             }.show()
                     }
@@ -648,7 +686,7 @@ class MainActivity : Activity() {
     private fun continueRecordingPermissionFlow() {
         // Floating controls are optional: recording must still work when overlay access is denied.
         if (Build.VERSION.SDK_INT >= 26 && !Settings.canDrawOverlays(this)) {
-            status.text = "Floating controls unavailable; notification controls will remain available"
+            status.text = tr("Floating controls unavailable; notification controls will remain available")
         }
         if ((selectedMode == RecordingService.MODE_MIC || selectedMode == RecordingService.MODE_BOTH) &&
             Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -670,7 +708,7 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             captureFlowActive = false
             startButton.isEnabled = true
-            status.text = "Could not open screen-capture permission"
+            status.text = tr("Could not open screen-capture permission")
             android.util.Log.e("KLOVVRecorder", "Capture permission launch failed", e)
         }
     }
@@ -682,7 +720,7 @@ class MainActivity : Activity() {
             else {
                 captureFlowActive = false
                 startButton.isEnabled = true
-                status.text = "Audio permission not granted"
+                status.text = tr("Audio permission not granted")
             }
         } else if (requestCode == notificationPermissionRequest) {
             // Recording can continue if notifications are denied; Android may still show the FGS task entry.
@@ -714,18 +752,18 @@ class MainActivity : Activity() {
                     try {
                         RecordingService.setRecordingPending(true)
                         if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
-                        status.text = "Recording starting…"
+                        status.text = tr("Recording starting…")
                     } catch (e: Exception) {
                         RecordingService.setRecordingPending(false)
                         startButton.isEnabled = true
-                        status.text = "Could not start recording service"
+                        status.text = tr("Could not start recording service")
                         android.util.Log.e("KLOVVRecorder", "Service launch failed", e)
                     }
                 } else {
                     startButton.isEnabled = false
                     countdownTimer = object : android.os.CountDownTimer(delaySeconds * 1000L, 1000L) {
                         override fun onTick(millisUntilFinished: Long) {
-                            status.text = "Recording starts in " + ((millisUntilFinished + 999) / 1000) + " seconds • tap STOP / CANCEL to cancel"
+                            status.text = tr("Recording starts in ") + ((millisUntilFinished + 999) / 1000) + tr(" seconds • tap STOP / CANCEL to cancel")
                         }
                         override fun onFinish() {
                             countdownTimer = null
@@ -733,11 +771,11 @@ class MainActivity : Activity() {
                                 try {
                                     RecordingService.setRecordingPending(true)
                                     if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
-                                    status.text = "Recording starting…"
+                                    status.text = tr("Recording starting…")
                                 } catch (e: Exception) {
                                     RecordingService.setRecordingPending(false)
                                     startButton.isEnabled = true
-                                    status.text = "Could not start recording service"
+                                    status.text = tr("Could not start recording service")
                                     android.util.Log.e("KLOVVRecorder", "Service launch failed", e)
                                 }
                             }
@@ -746,7 +784,7 @@ class MainActivity : Activity() {
                 }
             } else {
                 startButton.isEnabled = true
-                status.text = "Screen-capture permission cancelled"
+                status.text = tr("Screen-capture permission cancelled")
             }
         }
     }
