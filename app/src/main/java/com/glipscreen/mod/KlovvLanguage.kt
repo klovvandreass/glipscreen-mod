@@ -137,8 +137,8 @@ object KlovvLanguage {
         }
         if (value.startsWith("Encoder check:")) return value
             .replace("Encoder check:", "Pemeriksaan encoder:")
+             .replace("NOT SUPPORTED", "TIDAK DIDUKUNG")
             .replace("SUPPORTED", "DIDUKUNG")
-            .replace("NOT SUPPORTED", "TIDAK DIDUKUNG")
             .replace("hardware encoder", "encoder hardware")
             .replace("software encoder", "encoder software")
             .replace("Display refresh:", "Refresh layar:")
