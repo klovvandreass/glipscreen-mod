@@ -118,6 +118,13 @@ class RecordingService : Service() {
             try { beginCapture(resultCode, data) }
             catch (e: Exception) {
                 android.util.Log.e("KLOVVRecorder", "Start failed", e)
+                android.os.Handler(mainLooper).post {
+                    android.widget.Toast.makeText(
+                        this,
+                        "Recording could not start. This device may not support the selected resolution, FPS, or codec combination.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
                 requestStop()
                 if (!drainsStarted) {
                     videoDone.set(true)
