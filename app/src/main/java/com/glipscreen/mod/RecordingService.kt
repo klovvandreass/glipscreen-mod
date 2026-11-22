@@ -141,14 +141,15 @@ class RecordingService : Service() {
 
         val wantedMime = if (preferHevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
         val allCodecs = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
-        // Try the requested/native size first, then progressively safer sizes for devices
-        // whose hardware encoder cannot handle the full display resolution.
-        val sizeCandidates = listOf(1.0, 0.85, 0.75, 0.67, 0.5, 0.375).mapNotNull { factor ->
+        // Manual resolution is a real output target. Auto may step down if needed.
+        val autoSizeCandidates = listOf(1.0, 0.85, 0.75, 0.67, 0.5, 0.375).mapNotNull { factor ->
             val w = ((width * factor).toInt() / 2) * 2
             val h = ((height * factor).toInt() / 2) * 2
             if (w >= 480 && h >= 270) w to h else null
         }.distinct()
-        val fpsCandidates = if (intentRequestedFps > 0) listOf(intentRequestedFps, 60, 30, 24).distinct() else listOf(60, 30, 24)
+        val sizeCandidates = if (intentMaxDimension > 0) listOf(width to height) else autoSizeCandidates
+        // Fixed FPS must not silently fall back to a different rate.
+        val fpsCandidates = if (intentRequestedFps > 0) listOf(intentRequestedFps) else listOf(60, 30, 24)
         data class EncoderChoice(val info: MediaCodecInfo, val width: Int, val height: Int, val fps: Int)
         fun findEncoder(mime: String): EncoderChoice? {
             val candidates = allCodecs.filter { info ->
@@ -174,8 +175,7 @@ class RecordingService : Service() {
             return null
         }
         val selectedEncoder = findEncoder(wantedMime)
-            ?: (if (wantedMime != MediaFormat.MIMETYPE_VIDEO_AVC) findEncoder(MediaFormat.MIMETYPE_VIDEO_AVC) else null)
-            ?: throw IllegalStateException("No compatible video encoder for this device")
+            ?: throw IllegalStateException("This device cannot support the selected codec, resolution, and frame rate together. Choose a lower setting or another codec.")
         val codecInfo = selectedEncoder.info
         val alignedWidth = selectedEncoder.width
         val alignedHeight = selectedEncoder.height
