@@ -135,7 +135,9 @@ class RecordingService : Service() {
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(metrics)
-        val scale = if (intentMaxDimension <= 0) 1f else minOf(1f, intentMaxDimension.toFloat() / maxOf(metrics.widthPixels, metrics.heightPixels))
+        // Preserve the selected output dimension, including upscaling when the source display is smaller.
+        // Upscaling changes file dimensions, not the amount of source detail.
+        val scale = if (intentMaxDimension <= 0) 1f else intentMaxDimension.toFloat() / maxOf(metrics.widthPixels, metrics.heightPixels)
         val width = ((metrics.widthPixels * scale).toInt() / 2) * 2
         val height = ((metrics.heightPixels * scale).toInt() / 2) * 2
 
