@@ -135,6 +135,17 @@ object KlovvLanguage {
             val count = value.substringBefore(" ").toIntOrNull() ?: 0
             return "$count rekaman tersimpan"
         }
+        if (value.startsWith("Encoder check:")) return value
+            .replace("Encoder check:", "Pemeriksaan encoder:")
+            .replace("SUPPORTED", "DIDUKUNG")
+            .replace("NOT SUPPORTED", "TIDAK DIDUKUNG")
+            .replace("hardware encoder", "encoder hardware")
+            .replace("software encoder", "encoder software")
+            .replace("Display refresh:", "Refresh layar:")
+            .replace("Actual captured FPS is verified only after recording.", "FPS aktual hanya dapat diverifikasi setelah perekaman.")
+        if (value.startsWith("H.264 / AVC: NOT SUPPORTED") || value.startsWith("H.265 / HEVC: NOT SUPPORTED")) {
+            return value.replace("NOT SUPPORTED", "TIDAK DIDUKUNG")
+        }
         if (value.startsWith("Resolution: ")) return value.replace("Resolution:", "Resolusi:")
             .replace("Frame rate:", "Kecepatan frame:").replace("Not available", "Tidak tersedia")
             .replace("Bitrate:", "Bitrate:")
