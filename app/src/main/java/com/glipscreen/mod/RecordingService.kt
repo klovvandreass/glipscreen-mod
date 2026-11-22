@@ -582,7 +582,7 @@ class RecordingService : Service() {
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setWhen(System.currentTimeMillis()).setUsesChronometer(!paused.get()).setOngoing(true)
             .addAction(Notification.Action.Builder(null, label, toggle).build())
-            .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
+            .addAction(Notification.Action.Builder(android.R.drawable.ic_menu_save, "Save & Stop", stop).build()).build()
     }
 
     private fun updateNotification() {
@@ -606,7 +606,7 @@ class RecordingService : Service() {
                 start()
             }
             floatingChronometer = timer
-            val stop = Button(this).apply { text = "STOP"; setOnClickListener { startService(Intent(this@RecordingService, RecordingService::class.java).setAction(ACTION_STOP)) } }
+            val stop = Button(this).apply { text = "SAVE & STOP"; setOnClickListener { startService(Intent(this@RecordingService, RecordingService::class.java).setAction(ACTION_STOP)) } }
             panel.addView(title); panel.addView(timer); panel.addView(floatingPauseButton); panel.addView(stop)
             val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL; x = 12 }
             // Drag the floating panel by its title without blocking the Pause/Stop buttons.
