@@ -202,7 +202,7 @@ class MainActivity : Activity() {
                 .show()
         }
 
-        val qualityItems = listOf("Standard", "High quality", "Maximum quality")
+        val qualityItems = listOf("7 Mbps", "10 Mbps", "14 Mbps")
         val fpsItems = listOf("Auto", "24 FPS", "30 FPS", "60 FPS", "90 FPS", "120 FPS")
         val codecItems = listOf("H.264", "H.265 / HEVC")
         val resolutionItems = listOf("Auto", "480p", "720p HD", "1080p Full HD", "1440p 2K", "2160p 4K")
