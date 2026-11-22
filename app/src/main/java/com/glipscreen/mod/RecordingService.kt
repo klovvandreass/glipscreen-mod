@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 class RecordingService : Service() {
+    private fun tr(value: String): String = KlovvLanguage.translate(this, value)
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var inputSurface: Surface? = null
@@ -76,7 +77,7 @@ class RecordingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel(CHANNEL_ID, "Klovv Screen recording", NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(CHANNEL_ID, tr("Klovv Screen recording"), NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
@@ -573,16 +574,16 @@ class RecordingService : Service() {
 
     private fun createRecordingNotification(): Notification {
         val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
-        val label = if (paused.get()) "Resume" else "Pause"
+        val label = tr(if (paused.get()) "Resume" else "Pause")
         val toggle = PendingIntent.getService(this, 1002, Intent(this, RecordingService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1003, Intent(this, RecordingService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Klovv Screen")
-            .setContentText(if (paused.get()) "Recording paused" else "Recording • elapsed time")
+             .setContentText(tr(if (paused.get()) "Recording paused" else "Recording • elapsed time"))
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setWhen(System.currentTimeMillis()).setUsesChronometer(!paused.get()).setOngoing(true)
             .addAction(Notification.Action.Builder(null, label, toggle).build())
-            .addAction(Notification.Action.Builder(android.R.drawable.ic_menu_save, "Save & Stop", stop).build()).build()
+            .addAction(Notification.Action.Builder(android.R.drawable.ic_menu_save, tr("Save & Stop"), stop).build()).build()
     }
 
     private fun updateNotification() {
@@ -593,8 +594,8 @@ class RecordingService : Service() {
         if (Build.VERSION.SDK_INT < 26 || !android.provider.Settings.canDrawOverlays(this)) return
         try {
             val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 10, 12, 10); setBackgroundColor(0xEE111827.toInt()) }
-            val title = android.widget.TextView(this).apply { text = "KLOVV SCREEN • RECORDING"; textSize = 12f; setTextColor(0xFF80B7FF.toInt()); setPadding(8, 4, 8, 8) }
-            floatingPauseButton = Button(this).apply { text = "PAUSE"; setOnClickListener {
+            val title = android.widget.TextView(this).apply { text = tr("KLOVV SCREEN • RECORDING"); textSize = 12f; setTextColor(0xFF80B7FF.toInt()); setPadding(8, 4, 8, 8) }
+            floatingPauseButton = Button(this).apply { text = tr("PAUSE"); setOnClickListener {
                 val action = if (paused.get()) ACTION_RESUME else ACTION_PAUSE
                 startService(Intent(this@RecordingService, RecordingService::class.java).setAction(action))
             } }
@@ -606,7 +607,7 @@ class RecordingService : Service() {
                 start()
             }
             floatingChronometer = timer
-            val stop = Button(this).apply { text = "SAVE & STOP"; setOnClickListener { startService(Intent(this@RecordingService, RecordingService::class.java).setAction(ACTION_STOP)) } }
+            val stop = Button(this).apply { text = tr("SAVE & STOP"); setOnClickListener { startService(Intent(this@RecordingService, RecordingService::class.java).setAction(ACTION_STOP)) } }
             panel.addView(title); panel.addView(timer); panel.addView(floatingPauseButton); panel.addView(stop)
             val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL; x = 12 }
             // Drag the floating panel by its title without blocking the Pause/Stop buttons.
@@ -635,7 +636,7 @@ class RecordingService : Service() {
             floatingPanel = panel
         } catch (e: Exception) { android.util.Log.e("KLOVVRecorder", "Floating controls unavailable", e) }
     }
-    private fun updateFloatingControls() { floatingPauseButton?.text = if (paused.get()) "RESUME" else "PAUSE" }
+    private fun updateFloatingControls() { floatingPauseButton?.text = tr(if (paused.get()) "RESUME" else "PAUSE") }
     private fun removeFloatingControls() {
         try { val panel = floatingPanel; if (panel != null) windowManager?.removeView(panel) } catch (_: Exception) { }
         floatingPanel = null; floatingPauseButton = null; floatingChronometer = null; windowManager = null
