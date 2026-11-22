@@ -114,10 +114,18 @@ object KlovvLanguage {
         "KLOVV SCREEN • RECORDING" to "KLOVV SCREEN • MEREKAM"
     )
 
+    private val englishOverrides = mapOf(
+        "Belum ada video Klovv Screen. Hasil rekaman tersimpan di Movies/Klovv Screen." to
+            "No Klovv Screen videos yet. Recordings are saved in Movies/Klovv Screen."
+    )
+
     fun translate(context: Context, value: String): String {
         val language = context.getSharedPreferences("glip_settings", Context.MODE_PRIVATE)
             .getString("language", "id") ?: "id"
-        if (language != "id") return value
+        if (language == "en") {
+            englishOverrides[value]?.let { return it }
+            return id.entries.firstOrNull { it.value == value && it.key != value }?.key ?: value
+        }
         id[value]?.let { return it }
         if (value.startsWith("Recording starts in ")) {
             return "Rekaman dimulai dalam " + value.removePrefix("Recording starts in ")
