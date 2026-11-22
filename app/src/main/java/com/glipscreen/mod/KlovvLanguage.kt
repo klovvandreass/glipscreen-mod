@@ -5,6 +5,12 @@ import android.content.Context
 object KlovvLanguage {
     private val id = mapOf(
         "Screen recording made simple" to "Perekaman layar jadi lebih mudah",
+        "⌂\nHome" to "⌂\nBeranda",
+        "▣\nVideos" to "▣\nVideo",
+        "⚙\nSettings" to "⚙\nPengaturan",
+        "ⓘ\nAbout" to "ⓘ\nTentang",
+        "Auto" to "Otomatis",
+        "Klovv Screen recording" to "Perekaman Klovv Screen",
         "SCREEN RECORDER" to "PEREKAM LAYAR",
         "Ready to capture" to "Siap merekam",
         "Record gameplay, tutorials, or anything on your screen." to "Rekam gameplay, tutorial, atau apa pun di layar.",
