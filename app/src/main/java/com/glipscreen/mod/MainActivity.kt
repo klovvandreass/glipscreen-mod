@@ -326,11 +326,46 @@ class MainActivity : Activity() {
         settings.addView(label("Keep your recording setup organized.", 14f, 0xFF8795AA.toInt()))
         gap(settings, 22)
         val recordingCard = panel()
-        recordingCard.addView(section("RECORDING"))
-        gap(recordingCard, 10)
-        recordingCard.addView(label("Video and capture preferences", 16f, 0xFFFFFFFF.toInt(), true))
-        gap(recordingCard, 5)
-        recordingCard.addView(label("Resolution, frame rate, codec and quality controls will be arranged here in the next design pass.", 13f, 0xFF9AA8BC.toInt()))
+        recordingCard.addView(section("VIDEO"))
+        gap(recordingCard, 8)
+        recordingCard.addView(label("Recording quality and performance", 16f, 0xFFFFFFFF.toInt(), true))
+        gap(recordingCard, 4)
+        recordingCard.addView(label("Choose the capture settings you want to use.", 12f, 0xFF9AA8BC.toInt()))
+        gap(recordingCard, 12)
+
+        fun preferenceRow(title: String, items: List<String>, spinnerRef: Spinner, prefKey: String): LinearLayout {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(13), dp(12), dp(13))
+                background = surface(0xFF101B2B.toInt(), 12)
+                isClickable = true
+                isFocusable = true
+            }
+            val titleView = label(title, 13f, 0xFFDCE7F5.toInt(), true)
+            row.addView(titleView, LinearLayout.LayoutParams(0, -2, 1f))
+            val valueView = label(items[spinnerRef.selectedItemPosition], 12f, 0xFF83A9D8.toInt(), true).apply {
+                tag = "setting_value"
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            }
+            row.addView(valueView, LinearLayout.LayoutParams(-2, -2))
+            row.setOnClickListener { chooseSetting(title, items, spinnerRef, prefKey, row) }
+            return row
+        }
+        fun addPreferenceDivider(parent: LinearLayout) {
+            parent.addView(View(this).apply {
+                setBackgroundColor(0xFF1B2A40.toInt())
+            }, LinearLayout.LayoutParams(-1, dp(7)))
+        }
+        recordingCard.addView(preferenceRow("Resolution", resolutionItems, resolution, "resolution"))
+        addPreferenceDivider(recordingCard)
+        recordingCard.addView(preferenceRow("Frame rate", fpsItems, frameRate, "fps"))
+        addPreferenceDivider(recordingCard)
+        recordingCard.addView(preferenceRow("Video codec", codecItems, codec, "codec"))
+        addPreferenceDivider(recordingCard)
+        recordingCard.addView(preferenceRow("Video quality", qualityItems, quality, "quality"))
+        addPreferenceDivider(recordingCard)
+        recordingCard.addView(preferenceRow("Start countdown", listOf("No countdown", "3 seconds", "5 seconds", "10 seconds"), countdown, "countdown"))
         settings.addView(recordingCard)
         gap(settings, 14)
         val audioCard = panel()
