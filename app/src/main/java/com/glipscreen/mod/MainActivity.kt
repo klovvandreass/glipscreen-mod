@@ -47,6 +47,7 @@ class MainActivity : Activity() {
     private var selectedMode = if (Build.VERSION.SDK_INT >= 29) RecordingService.MODE_INTERNAL else RecordingService.MODE_MIC
     private var captureFlowActive = false
     private var countdownTimer: android.os.CountDownTimer? = null
+    private var updateCapabilitySummary: () -> Unit = {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -205,6 +206,7 @@ class MainActivity : Activity() {
                     prefs.edit().putInt(prefKey, which).apply()
                     tile.findViewWithTag<TextView>("setting_value")?.text = tr(items[which])
                     dialog.dismiss()
+                    updateCapabilitySummary()
                 }
                  .setNegativeButton(tr("Cancel"), null)
                 .show()
@@ -250,6 +252,17 @@ class MainActivity : Activity() {
         addHomeSetting(homePreference("Video codec", codecItems[codec.selectedItemPosition]) { row ->
             chooseSetting("Video codec", codecItems, codec, "codec", row)
         })
+        val capabilitySummary = label("", 12f, 0xFF9AABC1.toInt()).apply {
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            background = surface(0xFF101B2B.toInt(), 12, 0xFF263B55.toInt())
+        }
+        home.addView(capabilitySummary, LinearLayout.LayoutParams(-1, -2))
+        updateCapabilitySummary = {
+            val maxDimension = when (resolution.selectedItemPosition) { 1 -> 854; 2 -> 1280; 3 -> 1920; 4 -> 2560; 5 -> 3840; else -> 0 }
+            val requestedFps = when (frameRate.selectedItemPosition) { 1 -> 24; 2 -> 30; 3 -> 60; 4 -> 90; 5 -> 120; else -> 0 }
+            capabilitySummary.text = tr(DeviceCapabilityInspector.inspect(this, maxDimension, requestedFps, codec.selectedItemPosition == 1, quality.selectedItemPosition))
+        }
+        updateCapabilitySummary()
         gap(home, 12)
 
         val recordingsCard = panel().apply {
