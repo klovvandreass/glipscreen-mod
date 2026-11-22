@@ -55,7 +55,12 @@ class MainActivity : Activity() {
                 text = value
                 textSize = size
                 setTextColor(color)
-                if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
+                typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+                includeFontPadding = false
+                if (bold) {
+                    setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL))
+                    letterSpacing = 0.005f
+                }
             }
         fun gap(parent: LinearLayout, height: Int) {
             parent.addView(View(this), LinearLayout.LayoutParams(1, dp(height)))
@@ -63,7 +68,7 @@ class MainActivity : Activity() {
         fun panel(): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(17), dp(16), dp(17), dp(16))
-            background = surface(0xFF0C111B.toInt(), 18, 0xFF1B2D49.toInt())
+            background = surface(0xFF0B1727.toInt(), 18, 0xFF1B3556.toInt())
         }
         fun section(value: String) = label(value, 12f, 0xFF8B9AB2.toInt(), true).apply {
             letterSpacing = 0.08f
@@ -75,7 +80,7 @@ class MainActivity : Activity() {
             }
             val scroll = android.widget.ScrollView(this).apply {
                 isFillViewport = true
-                setBackgroundColor(0xFF050608.toInt())
+                setBackgroundColor(0xFF030508.toInt())
                 addView(content)
             }
             return scroll to content
@@ -84,7 +89,7 @@ class MainActivity : Activity() {
         val prefs = getSharedPreferences("glip_settings", MODE_PRIVATE)
         val shell = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xFF050608.toInt())
+            setBackgroundColor(0xFF030508.toInt())
         }
         val pages = android.widget.FrameLayout(this)
         shell.addView(pages, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -92,7 +97,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(7), dp(8), dp(7), dp(8))
-            background = surface(0xFF080D16.toInt(), 0)
+            background = surface(0xFF070D17.toInt(), 0, 0xFF14243A.toInt())
         }
         shell.addView(nav, LinearLayout.LayoutParams(-1, dp(66)))
         setContentView(shell)
@@ -120,9 +125,11 @@ class MainActivity : Activity() {
         homeScroll.setPadding(0, dp(8), 0, 0)
         homeScroll.clipToPadding = false
 
-        home.addView(label("Klovv Screen", 25f, 0xFFFFFFFF.toInt(), true))
-        gap(home, 5)
-        home.addView(label("Your screen, captured beautifully.", 14f, 0xFF9AABC1.toInt()))
+        home.addView(label("KLOVV SCREEN", 25f, 0xFFFFFFFF.toInt(), true))
+        gap(home, 6)
+        home.addView(label("SCREEN RECORDER  •  SIMPLE. CLEAN. READY.", 10f, 0xFF789CCB.toInt(), true))
+        gap(home, 7)
+        home.addView(label("Capture your screen with clarity and control.", 13f, 0xFF9AABC1.toInt()))
         gap(home, 22)
 
         val hero = panel().apply {
@@ -415,7 +422,7 @@ class MainActivity : Activity() {
         pages.addView(videosScroll)
         videos.addView(label("My recordings", 27f, 0xFFFFFFFF.toInt(), true))
         gap(videos, 5)
-        videos.addView(label("Find and manage your saved videos.", 14f, 0xFF8795AA.toInt()))
+        videos.addView(label("Your recordings, organized in one place.", 14f, 0xFF8795AA.toInt()))
         gap(videos, 22)
         val videosCard = panel()
         videosCard.addView(section("VIDEO LIBRARY"))
@@ -440,7 +447,7 @@ class MainActivity : Activity() {
         pages.addView(aboutScroll)
         about.addView(label("About", 27f, 0xFFFFFFFF.toInt(), true))
         gap(about, 5)
-        about.addView(label("A little about your recorder.", 14f, 0xFF8795AA.toInt()))
+        about.addView(label("Built to make screen recording feel effortless.", 14f, 0xFF8795AA.toInt()))
         gap(about, 22)
         val aboutCard = panel()
         aboutCard.gravity = Gravity.CENTER_HORIZONTAL
@@ -454,7 +461,10 @@ class MainActivity : Activity() {
         gap(aboutCard, 5)
         aboutCard.addView(label("SCREEN RECORDER", 11f, 0xFF8191AA.toInt(), true))
         gap(aboutCard, 16)
-        aboutCard.addView(label("Simple screen recording, made with care.", 13f, 0xFF9AA8BC.toInt()))
+        aboutCard.addView(label("A focused screen recorder with a clean interface and practical controls.", 13f, 0xFF9AA8BC.toInt()).apply {
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+        })
         about.addView(aboutCard)
 
         val pageViews = listOf(homeScroll, videosScroll, settingsScroll, aboutScroll)
